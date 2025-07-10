@@ -305,24 +305,44 @@ func (m model) killProcess(pid int, processName string) tea.Cmd {
 			return killProcessMsg{success: false, error: "Invalid PID"}
 		}
 
-		// Try to find the process first
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			return killProcessMsg{success: false, error: fmt.Sprintf("Process not found: %v", err)}
+		// Get the port number from the selected row
+		selected := m.table.SelectedRow()
+		if len(selected) == 0 {
+			return killProcessMsg{success: false, error: "No row selected"}
 		}
 
-		// Try SIGTERM first (graceful)
-		err = process.Signal(syscall.SIGTERM)
-		if err != nil {
-			// If SIGTERM fails, try SIGKILL (force)
-			err = process.Signal(syscall.SIGKILL)
-			if err != nil {
-				return killProcessMsg{success: false, error: fmt.Sprintf("Failed to kill process: %v", err)}
+		port := selected[0]
+
+		// Try to kill by port using lsof - this is often more reliable
+		cmd := exec.Command("lsof", "-ti", fmt.Sprintf(":%s", port))
+		output, err := cmd.Output()
+
+		if err == nil && len(output) > 0 {
+			// lsof found PIDs using this port
+			pidStr := strings.TrimSpace(string(output))
+			lines := strings.Split(pidStr, "\n")
+
+			for _, line := range lines {
+				if targetPid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil {
+					// Only kill the exact PID we clicked on
+					if targetPid == pid {
+						err := syscall.Kill(targetPid, syscall.SIGKILL) // Use SIGKILL directly
+						if err != nil {
+							return killProcessMsg{success: false, error: fmt.Sprintf("Failed to kill PID %d: %v", targetPid, err)}
+						}
+						return killProcessMsg{success: true, error: fmt.Sprintf("Killed %s (PID %d) on port %s", processName, targetPid, port)}
+					}
+				}
 			}
-			return killProcessMsg{success: true, error: fmt.Sprintf("Force killed %s (PID %d)", processName, pid)}
 		}
 
-		return killProcessMsg{success: true, error: fmt.Sprintf("Terminated %s (PID %d)", processName, pid)}
+		// Fallback to direct PID kill if lsof approach didn't work
+		err = syscall.Kill(pid, syscall.SIGKILL)
+		if err != nil {
+			return killProcessMsg{success: false, error: fmt.Sprintf("Failed to kill PID %d: %v", pid, err)}
+		}
+
+		return killProcessMsg{success: true, error: fmt.Sprintf("Killed %s (PID %d)", processName, pid)}
 	}
 }
 
