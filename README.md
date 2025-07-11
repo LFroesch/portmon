@@ -34,6 +34,13 @@ go build -o portmon
 cp portmon ~/.local/bin/
 ```
 
+to edit custom ports:
+Run it once, then edit the portmon-config.json, in the directory with the build file.
+
+```bash
+nano ~/.local/bin/portmon-config.json 
+```
+
 Make sure `~/.local/bin` is in your PATH.
 
 ## Usage

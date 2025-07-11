@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -27,9 +29,23 @@ type Port struct {
 	User      string
 }
 
+type PortMapping struct {
+	Port        string `json:"port"`
+	CustomName  string `json:"custom_name"`
+	Description string `json:"description"`
+	Hidden      bool   `json:"hidden"`
+	Link        string `json:"link"`
+}
+
+type PortConfig struct {
+	Mappings []PortMapping `json:"port_mappings"`
+}
+
 type model struct {
 	table       table.Model
 	ports       []Port
+	portConfig  PortConfig
+	configFile  string
 	lastUpdate  time.Time
 	width       int
 	height      int
@@ -38,12 +54,66 @@ type model struct {
 }
 
 type tickMsg time.Time
+type updatePortsMsg []Port
+type killProcessMsg struct {
+	success bool
+	error   string
+}
+type statusUpdateMsg struct {
+	message string
+	color   string
+}
+
+func loadPortConfig(configFile string) PortConfig {
+	var config PortConfig
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		defaultConfig := PortConfig{
+			Mappings: []PortMapping{
+				{Port: "3000", CustomName: "React App", Description: "Frontend development server"},
+				{Port: "3001", CustomName: "Next.js", Description: "Next.js development server"},
+				{Port: "5000", CustomName: "API Server", Description: "Backend REST API"},
+				{Port: "5173", CustomName: "Vite Dev", Description: "Vite development server"},
+				{Port: "8000", CustomName: "Django", Description: "Django development server"},
+				{Port: "8080", CustomName: "Test Server", Description: "Testing environment"},
+				{Port: "9000", CustomName: "Go Server", Description: "Go application server"},
+			},
+		}
+
+		data, _ := json.MarshalIndent(defaultConfig, "", "  ")
+		os.WriteFile(configFile, data, 0644)
+		return defaultConfig
+	}
+
+	json.Unmarshal(data, &config)
+	return config
+}
+
+func (m *model) getCustomName(port string) (string, string, bool, string) {
+	for _, mapping := range m.portConfig.Mappings {
+		if mapping.Port == port {
+			return mapping.CustomName, mapping.Description, mapping.Hidden, mapping.Link
+		}
+	}
+	return "", "", false, ""
+}
 
 func initialModel() model {
+	execPath, err := os.Executable()
+	var configFile string
+
+	if err != nil {
+		homeDir, _ := os.UserHomeDir()
+		configFile = filepath.Join(homeDir, ".portmon-config.json")
+	} else {
+		execDir := filepath.Dir(execPath)
+		configFile = filepath.Join(execDir, "portmon-config.json")
+	}
+
 	columns := []table.Column{
 		{Title: "Port", Width: 8},
 		{Title: "Protocol", Width: 8},
-		{Title: "Process", Width: 15},
+		{Title: "Process", Width: 20},
 		{Title: "PID", Width: 8},
 		{Title: "User", Width: 10},
 		{Title: "Address", Width: 20},
@@ -53,7 +123,7 @@ func initialModel() model {
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithFocused(true),
-		table.WithHeight(10), // Initial height, will be adjusted
+		table.WithHeight(10),
 	)
 
 	s := table.DefaultStyles()
@@ -78,6 +148,8 @@ func initialModel() model {
 	return model{
 		table:       t,
 		ports:       []Port{},
+		portConfig:  loadPortConfig(configFile),
+		configFile:  configFile,
 		lastUpdate:  time.Now(),
 		width:       80,
 		height:      24,
@@ -106,8 +178,6 @@ func (m model) updatePorts() tea.Cmd {
 	}
 }
 
-type updatePortsMsg []Port
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -116,14 +186,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Adjust table height: total height - header - footer - borders
 		tableHeight := m.height - 6
 		if tableHeight < 5 {
 			tableHeight = 5
 		}
 
-		// Adjust column widths based on terminal width
-		availableWidth := m.width - 15 // Account for borders and padding
+		availableWidth := m.width - 15
 		portWidth := 8
 		protocolWidth := 8
 		pidWidth := 8
@@ -132,8 +200,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		addressWidth := 20
 		processWidth := availableWidth - portWidth - protocolWidth - pidWidth - userWidth - statusWidth - addressWidth
 
-		if processWidth < 10 {
-			processWidth = 10
+		if processWidth < 15 {
+			processWidth = 15
 		}
 		if addressWidth > availableWidth/3 {
 			addressWidth = availableWidth / 3
@@ -156,26 +224,60 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+		case "r":
+			return m, tea.Batch(
+				m.updatePorts(),
+				func() tea.Msg {
+					return statusUpdateMsg{message: "🔄 Refreshed", color: "34"}
+				},
+			)
+		case "x":
+			m.portConfig = loadPortConfig(m.configFile)
+			return m, tea.Batch(
+				m.updatePorts(),
+				func() tea.Msg {
+					return statusUpdateMsg{message: "🔄 Config reloaded", color: "34"}
+				},
+			)
+		case "c":
+			return m, func() tea.Msg {
+				return statusUpdateMsg{message: fmt.Sprintf("📁 Config: %s", m.configFile), color: "86"}
+			}
+		case "o":
+			if len(m.ports) > 0 {
+				selected := m.table.SelectedRow()
+				if len(selected) > 0 && selected[0] != "" {
+					if strings.Contains(selected[2], "═══") || selected[2] == "" {
+						return m, nil
+					}
+
+					port := selected[0]
+					if _, _, _, link := m.getCustomName(port); link != "" {
+						return m, m.openLink(link, port)
+					} else {
+						defaultLink := fmt.Sprintf("http://localhost:%s", port)
+						return m, m.openLink(defaultLink, port)
+					}
+				}
+			}
+			return m, nil
 		case "enter":
 			if len(m.ports) > 0 {
 				selected := m.table.SelectedRow()
 				if len(selected) > 3 && selected[3] != "" {
-					// Check if this is a section header row or empty spacing row
 					if strings.Contains(selected[2], "═══") || selected[2] == "" {
-						// Skip section headers and spacing rows
 						return m, nil
 					}
 
 					pid, err := strconv.Atoi(selected[3])
 					if err == nil && pid > 0 {
-						return m, m.killProcess(pid, selected[2]) // Pass process name too
+						return m, m.killProcess(pid, selected[2])
 					}
 				}
 			}
 		}
 	case tickMsg:
 		m.lastUpdate = time.Time(msg)
-		// Clear status message after a few seconds
 		if m.statusMsg != "" {
 			m.statusMsg = ""
 			m.statusColor = "240"
@@ -187,11 +289,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updatePortsMsg:
 		m.ports = []Port(msg)
 
-		// Separate user processes from system processes
 		var userPorts []Port
 		var systemPorts []Port
 
 		for _, port := range m.ports {
+			if _, _, hidden, _ := m.getCustomName(port.Port); hidden {
+				continue
+			}
+
 			if isUserProcess(port) {
 				userPorts = append(userPorts, port)
 			} else {
@@ -199,7 +304,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Sort user ports by port number
 		sort.Slice(userPorts, func(i, j int) bool {
 			portI, errI := strconv.Atoi(userPorts[i].Port)
 			portJ, errJ := strconv.Atoi(userPorts[j].Port)
@@ -209,7 +313,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return portI < portJ
 		})
 
-		// Sort system ports by port number
 		sort.Slice(systemPorts, func(i, j int) bool {
 			portI, errI := strconv.Atoi(systemPorts[i].Port)
 			portJ, errJ := strconv.Atoi(systemPorts[j].Port)
@@ -219,21 +322,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return portI < portJ
 		})
 
-		// Combine ports with user processes first, then system processes
 		m.ports = append(userPorts, systemPorts...)
 
-		// Create rows with section separators
 		var rows []table.Row
 
-		// Add user processes section
 		if len(userPorts) > 0 {
-			// Add section header for user processes
 			rows = append(rows, table.Row{
 				"", "", "═══ USER PROCESSES ═══", "", "", "", "",
 			})
 
 			for _, port := range userPorts {
 				processName := cleanProcessName(port.Process)
+
+				if customName, _, _, _ := m.getCustomName(port.Port); customName != "" {
+					processName = fmt.Sprintf("%s (%s)", customName, processName)
+				}
+
 				addressDisplay := cleanAddress(port.LocalAddr)
 
 				rows = append(rows, table.Row{
@@ -248,22 +352,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Add system processes section
 		if len(systemPorts) > 0 {
-			// Add spacing between sections if we have user processes
 			if len(userPorts) > 0 {
 				rows = append(rows, table.Row{
 					"", "", "", "", "", "", "",
 				})
 			}
 
-			// Add section header for system processes
 			rows = append(rows, table.Row{
 				"", "", "═══ SYSTEM PROCESSES ═══", "", "", "", "",
 			})
 
 			for _, port := range systemPorts {
 				processName := cleanProcessName(port.Process)
+
+				if customName, _, _, _ := m.getCustomName(port.Port); customName != "" {
+					processName = fmt.Sprintf("%s (%s)", customName, processName)
+				}
+
 				addressDisplay := cleanAddress(port.LocalAddr)
 
 				rows = append(rows, table.Row{
@@ -281,22 +387,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetRows(rows)
 	case killProcessMsg:
 		if msg.success {
-			m.statusMsg = msg.error // Contains success message
-			m.statusColor = "34"    // Green
+			m.statusMsg = msg.error
+			m.statusColor = "34"
 		} else {
 			m.statusMsg = "Error: " + msg.error
-			m.statusColor = "196" // Red
+			m.statusColor = "196"
 		}
 		return m, m.updatePorts()
+	case statusUpdateMsg:
+		m.statusMsg = msg.message
+		m.statusColor = msg.color
+		return m, nil
 	}
 
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
-}
-
-type killProcessMsg struct {
-	success bool
-	error   string
 }
 
 func (m model) killProcess(pid int, processName string) tea.Cmd {
@@ -305,7 +410,6 @@ func (m model) killProcess(pid int, processName string) tea.Cmd {
 			return killProcessMsg{success: false, error: "Invalid PID"}
 		}
 
-		// Get the port number from the selected row
 		selected := m.table.SelectedRow()
 		if len(selected) == 0 {
 			return killProcessMsg{success: false, error: "No row selected"}
@@ -313,20 +417,17 @@ func (m model) killProcess(pid int, processName string) tea.Cmd {
 
 		port := selected[0]
 
-		// Try to kill by port using lsof - this is often more reliable
 		cmd := exec.Command("lsof", "-ti", fmt.Sprintf(":%s", port))
 		output, err := cmd.Output()
 
 		if err == nil && len(output) > 0 {
-			// lsof found PIDs using this port
 			pidStr := strings.TrimSpace(string(output))
 			lines := strings.Split(pidStr, "\n")
 
 			for _, line := range lines {
 				if targetPid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil {
-					// Only kill the exact PID we clicked on
 					if targetPid == pid {
-						err := syscall.Kill(targetPid, syscall.SIGKILL) // Use SIGKILL directly
+						err := syscall.Kill(targetPid, syscall.SIGKILL)
 						if err != nil {
 							return killProcessMsg{success: false, error: fmt.Sprintf("Failed to kill PID %d: %v", targetPid, err)}
 						}
@@ -336,13 +437,25 @@ func (m model) killProcess(pid int, processName string) tea.Cmd {
 			}
 		}
 
-		// Fallback to direct PID kill if lsof approach didn't work
 		err = syscall.Kill(pid, syscall.SIGKILL)
 		if err != nil {
 			return killProcessMsg{success: false, error: fmt.Sprintf("Failed to kill PID %d: %v", pid, err)}
 		}
 
 		return killProcessMsg{success: true, error: fmt.Sprintf("Killed %s (PID %d)", processName, pid)}
+	}
+}
+
+func (m model) openLink(url string, port string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("cmd.exe", "/c", "start", url)
+		err := cmd.Start()
+
+		if err != nil {
+			return statusUpdateMsg{message: fmt.Sprintf("❌ Failed to open %s: %v", url, err), color: "196"}
+		}
+
+		return statusUpdateMsg{message: fmt.Sprintf("🌐 Opened %s (port %s)", url, port), color: "34"}
 	}
 }
 
@@ -354,13 +467,12 @@ func (m model) View() string {
 		Align(lipgloss.Left).
 		Render("🔍 Portmon - Live Port Monitor")
 
-	baseInfo := fmt.Sprintf("Last updated: %s | Press 'q' to quit | Press 'enter' to kill selected process | User processes shown first",
+	baseInfo := fmt.Sprintf("Last updated: %s | 'q': quit | 'enter': kill | 'o': open link | 'r': refresh | 'x': reload config | 'c': show config path",
 		m.lastUpdate.Format("15:04:05"))
 
-	// Add status message if present
 	infoText := baseInfo
 	if m.statusMsg != "" {
-		infoText = fmt.Sprintf("%s | %s", baseInfo, m.statusMsg)
+		infoText = fmt.Sprintf("%s \n> %s", baseInfo, m.statusMsg)
 	}
 
 	info := lipgloss.NewStyle().
@@ -375,14 +487,12 @@ func (m model) View() string {
 func getPorts() []Port {
 	var ports []Port
 
-	// Try netstat first
 	cmd := exec.Command("netstat", "-tulpn")
 	output, err := cmd.Output()
 	if err == nil {
 		ports = parseNetstatOutput(string(output))
 	}
 
-	// If netstat fails or returns no results, try lsof
 	if len(ports) == 0 {
 		cmd = exec.Command("lsof", "-i", "-P", "-n")
 		output, err = cmd.Output()
@@ -398,7 +508,6 @@ func parseNetstatOutput(output string) []Port {
 	var ports []Port
 	lines := strings.Split(output, "\n")
 
-	// Regex to parse netstat output
 	re := regexp.MustCompile(`(\w+)\s+\d+\s+\d+\s+([^\s]+):(\d+)\s+[^\s]+\s+(\w+)(?:\s+(\d+)/([^\s]+))?`)
 
 	for _, line := range lines {
@@ -424,7 +533,6 @@ func parseNetstatOutput(output string) []Port {
 				port.Process = matches[6]
 			}
 
-			// Try to get user info
 			if port.PID > 0 {
 				if user := getUserFromPID(port.PID); user != "" {
 					port.User = user
@@ -460,12 +568,10 @@ func parseLsofOutput(output string) []Port {
 					port.PID = pid
 				}
 
-				// Get user from field 2
 				if len(fields) > 2 {
 					port.User = fields[2]
 				}
 
-				// Extract port and address from field 8
 				if len(fields) > 8 {
 					port.LocalAddr = fields[8]
 					if colonIndex := strings.LastIndex(fields[8], ":"); colonIndex != -1 {
@@ -497,15 +603,12 @@ func getUserFromPID(pid int) string {
 }
 
 func isUserProcess(port Port) bool {
-	// Get current user
 	currentUser := os.Getenv("USER")
 	if currentUser == "" {
 		currentUser = os.Getenv("LOGNAME")
 	}
 
-	// Check if the process is owned by the current user
 	if port.User == currentUser {
-		// Additional checks for commonly monitored development processes
 		processName := strings.ToLower(port.Process)
 		userProcesses := []string{
 			"node", "npm", "yarn", "pnpm", "bun",
@@ -531,11 +634,9 @@ func isUserProcess(port Port) bool {
 			}
 		}
 
-		// Check for common development ports
 		if port.Port != "" {
 			portNum, err := strconv.Atoi(port.Port)
 			if err == nil {
-				// Common development/user ports
 				userPorts := []int{3000, 3001, 3002, 3003, 4000, 5000, 5001, 5173, 8000, 8080, 8081, 8888, 9000}
 				for _, userPort := range userPorts {
 					if portNum == userPort {
@@ -543,7 +644,6 @@ func isUserProcess(port Port) bool {
 					}
 				}
 
-				// Development port ranges
 				if (portNum >= 3000 && portNum <= 3999) ||
 					(portNum >= 4000 && portNum <= 4999) ||
 					(portNum >= 5000 && portNum <= 5999) ||
@@ -555,7 +655,6 @@ func isUserProcess(port Port) bool {
 		}
 	}
 
-	// Check for system processes that should be deprioritized
 	systemUsers := []string{"root", "daemon", "nobody", "www-data", "nginx", "apache", "mysql", "postgres", "systemd+"}
 	for _, sysUser := range systemUsers {
 		if port.User == sysUser {
@@ -563,20 +662,14 @@ func isUserProcess(port Port) bool {
 		}
 	}
 
-	// If it's the current user but not a recognized dev process, still prioritize it
 	return port.User == currentUser
 }
 
 func cleanProcessName(process string) string {
-	// Handle common process name patterns
 	if process == "unknown" {
 		return "unknown"
 	}
 
-	// Remove common prefixes/suffixes to make names clearer
-	cleanName := process
-
-	// Handle some common cases
 	switch {
 	case strings.Contains(process, "node"):
 		return "node"
@@ -600,7 +693,7 @@ func cleanProcessName(process string) string {
 		return "ssh"
 	}
 
-	return cleanName
+	return process
 }
 
 func cleanAddress(address string) string {
@@ -608,7 +701,6 @@ func cleanAddress(address string) string {
 		return ""
 	}
 
-	// Simplify localhost addresses
 	address = strings.ReplaceAll(address, "127.0.0.1", "localhost")
 	address = strings.ReplaceAll(address, "::1", "localhost")
 	address = strings.ReplaceAll(address, "0.0.0.0", "*")
