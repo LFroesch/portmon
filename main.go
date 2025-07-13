@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"portmon/internal/logdog"
+
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -467,12 +469,35 @@ func (m model) View() string {
 		Align(lipgloss.Left).
 		Render("🔍 Portmon - Live Port Monitor")
 
-	baseInfo := fmt.Sprintf("Last updated: %s | 'q': quit | 'enter': kill | 'o': open link | 'r': refresh | 'x': reload config | 'c': show config path",
-		m.lastUpdate.Format("15:04:05"))
+	baseInfo := fmt.Sprintf("Last updated: %s", m.lastUpdate.Format("15:04:05"))
 
-	infoText := baseInfo
+	// Color styles for commands
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))     // Blue color for keys
+	actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))  // Green color for action text
+	bulletStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")) // Gray color for bullets
+
+	commandsLine := fmt.Sprintf("%s: %s %s %s: %s %s %s: %s %s %s: %s %s %s: %s %s %s: %s",
+		keyStyle.Render("q"),
+		actionStyle.Render("quit"),
+		bulletStyle.Render("•"),
+		keyStyle.Render("enter"),
+		actionStyle.Render("kill"),
+		bulletStyle.Render("•"),
+		keyStyle.Render("o"),
+		actionStyle.Render("open link"),
+		bulletStyle.Render("•"),
+		keyStyle.Render("r"),
+		actionStyle.Render("refresh"),
+		bulletStyle.Render("•"),
+		keyStyle.Render("x"),
+		actionStyle.Render("reload config"),
+		bulletStyle.Render("•"),
+		keyStyle.Render("c"),
+		actionStyle.Render("show config path"))
+
+	infoText := baseInfo + "\n" + commandsLine
 	if m.statusMsg != "" {
-		infoText = fmt.Sprintf("%s \n> %s", baseInfo, m.statusMsg)
+		infoText = fmt.Sprintf("%s\n> %s", infoText, m.statusMsg)
 	}
 
 	info := lipgloss.NewStyle().
@@ -608,53 +633,7 @@ func isUserProcess(port Port) bool {
 		currentUser = os.Getenv("LOGNAME")
 	}
 
-	if port.User == currentUser {
-		processName := strings.ToLower(port.Process)
-		userProcesses := []string{
-			"node", "npm", "yarn", "pnpm", "bun",
-			"python", "python3", "pip", "poetry", "uvicorn", "gunicorn", "flask", "django",
-			"java", "mvn", "gradle", "spring",
-			"go", "air", "gin",
-			"php", "composer", "artisan",
-			"ruby", "rails", "bundle",
-			"rust", "cargo",
-			"docker", "docker-compose",
-			"nginx", "apache", "httpd",
-			"mysql", "postgres", "postgresql", "redis", "mongodb", "sqlite",
-			"code", "vscode", "sublime", "vim", "nvim", "emacs",
-			"git", "gitk",
-			"webpack", "vite", "parcel", "rollup",
-			"jest", "mocha", "cypress", "playwright",
-			"http-server", "serve", "static-server",
-		}
-
-		for _, userProc := range userProcesses {
-			if strings.Contains(processName, userProc) {
-				return true
-			}
-		}
-
-		if port.Port != "" {
-			portNum, err := strconv.Atoi(port.Port)
-			if err == nil {
-				userPorts := []int{3000, 3001, 3002, 3003, 4000, 5000, 5001, 5173, 8000, 8080, 8081, 8888, 9000}
-				for _, userPort := range userPorts {
-					if portNum == userPort {
-						return true
-					}
-				}
-
-				if (portNum >= 3000 && portNum <= 3999) ||
-					(portNum >= 4000 && portNum <= 4999) ||
-					(portNum >= 5000 && portNum <= 5999) ||
-					(portNum >= 8000 && portNum <= 8999) ||
-					(portNum >= 9000 && portNum <= 9999) {
-					return true
-				}
-			}
-		}
-	}
-
+	// System users are definitely system processes
 	systemUsers := []string{"root", "daemon", "nobody", "www-data", "nginx", "apache", "mysql", "postgres", "systemd+"}
 	for _, sysUser := range systemUsers {
 		if port.User == sysUser {
@@ -662,7 +641,81 @@ func isUserProcess(port Port) bool {
 		}
 	}
 
-	return port.User == currentUser
+	// If not running under current user, it's definitely system
+	if port.User != currentUser {
+		return false
+	}
+
+	// High ports (ephemeral range) are typically system processes - check this FIRST
+	if port.Port != "" {
+		if portNum, err := strconv.Atoi(port.Port); err == nil {
+			if portNum >= 10000 {
+				return false // High ephemeral ports are system processes
+			}
+		}
+	}
+
+	processName := strings.ToLower(port.Process)
+
+	// Known development/user processes
+	userProcesses := []string{
+		"node", "npm", "yarn", "pnpm", "bun",
+		"python", "python3", "pip", "poetry", "uvicorn", "gunicorn", "flask", "django",
+		"java", "mvn", "gradle", "spring",
+		"go", "air", "gin",
+		"php", "composer", "artisan",
+		"ruby", "rails", "bundle",
+		"rust", "cargo",
+		"docker", "docker-compose",
+		"nginx", "apache", "httpd",
+		"mysql", "postgres", "postgresql", "redis", "mongodb", "sqlite",
+		"code", "vscode", "sublime", "vim", "nvim", "emacs",
+		"git", "gitk",
+		"webpack", "vite", "parcel", "rollup",
+		"jest", "mocha", "cypress", "playwright",
+		"http-server", "serve", "static-server",
+	}
+
+	// Check if it's a known development process
+	for _, userProc := range userProcesses {
+		if strings.Contains(processName, userProc) {
+			return true
+		}
+	}
+
+	// Check for common development port ranges (only for lower ports now)
+	if port.Port != "" {
+		portNum, err := strconv.Atoi(port.Port)
+		if err == nil {
+			// Common development ports
+			if isCommonDevPort(portNum) {
+				return true
+			}
+
+			// Development port ranges
+			if (portNum >= 3000 && portNum <= 3999) ||
+				(portNum >= 4000 && portNum <= 4999) ||
+				(portNum >= 5000 && portNum <= 5999) ||
+				(portNum >= 8000 && portNum <= 8999) ||
+				(portNum >= 9000 && portNum <= 9999) {
+				return true
+			}
+		}
+	}
+
+	// Default: if it's under current user but not identified as dev process, treat as system
+	return false
+}
+
+// Helper function to identify common development ports
+func isCommonDevPort(portNum int) bool {
+	commonDevPorts := []int{3000, 3001, 3002, 3003, 4000, 5000, 5001, 5173, 8000, 8080, 8081, 8888, 9000}
+	for _, devPort := range commonDevPorts {
+		if portNum == devPort {
+			return true
+		}
+	}
+	return false
 }
 
 func cleanProcessName(process string) string {
@@ -710,8 +763,10 @@ func cleanAddress(address string) string {
 }
 
 func main() {
+	logdog.Info("Starting Portmon...")
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
+
 }
