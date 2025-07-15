@@ -14,8 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"portmon/internal/logdog"
-
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -101,16 +99,9 @@ func (m *model) getCustomName(port string) (string, string, bool, string) {
 }
 
 func initialModel() model {
-	execPath, err := os.Executable()
-	var configFile string
 
-	if err != nil {
-		homeDir, _ := os.UserHomeDir()
-		configFile = filepath.Join(homeDir, ".portmon-config.json")
-	} else {
-		execDir := filepath.Dir(execPath)
-		configFile = filepath.Join(execDir, "portmon-config.json")
-	}
+	homeDir, _ := os.UserHomeDir()
+	configFile := filepath.Join(homeDir, ".config", "portmon", "config.json")
 
 	columns := []table.Column{
 		{Title: "Port", Width: 8},
@@ -763,7 +754,6 @@ func cleanAddress(address string) string {
 }
 
 func main() {
-	logdog.Info("Starting Portmon...")
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
