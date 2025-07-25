@@ -34,11 +34,13 @@ go build -o portmon
 cp portmon ~/.local/bin/
 ```
 
-to edit custom ports:
-Run it once, then edit the portmon-config.json, in the directory with the build file.
+### Configuration
+
+Portmon creates a configuration file at `~/.config/portmon/config.json` on first run. This file allows you to customize port names, descriptions, and links.
 
 ```bash
-nano ~/.local/bin/portmon-config.json 
+# Edit the configuration file
+nano ~/.config/portmon/config.json
 ```
 
 Make sure `~/.local/bin` is in your PATH.
@@ -55,6 +57,10 @@ portmon
 
 - **Arrow keys** or **j/k** - Navigate through the port list
 - **Enter** - Kill the selected process (with confirmation)
+- **o** - Open the port's URL in your default browser
+- **r** - Manually refresh the port list
+- **x** - Reload configuration file
+- **c** - Show configuration file path
 - **q** or **Ctrl+C** - Quit the application
 
 ### Interface
@@ -72,6 +78,39 @@ Each entry shows:
 - **User** - User running the process
 - **Address** - Bind address (simplified display)
 - **Status** - Connection status
+
+## Configuration File
+
+The configuration file (`~/.config/portmon/config.json`) allows you to customize how ports are displayed:
+
+```json
+{
+  "port_mappings": [
+    {
+      "port": "3000",
+      "custom_name": "React App",
+      "description": "Frontend development server",
+      "hidden": false,
+      "link": "http://localhost:3000"
+    },
+    {
+      "port": "5000",
+      "custom_name": "API Server",
+      "description": "Backend REST API",
+      "hidden": false,
+      "link": "http://localhost:5000/api"
+    }
+  ]
+}
+```
+
+### Configuration Options
+
+- **port**: The port number to customize
+- **custom_name**: Display name for the port (shown in the Process column)
+- **description**: Description of what runs on this port
+- **hidden**: Set to `true` to hide this port from the display
+- **link**: Custom URL to open when pressing 'o' (defaults to `http://localhost:PORT`)
 
 ## Smart Process Detection
 
@@ -107,12 +146,22 @@ Port    Protocol Process         PID     User    Address              Status
 80      TCP      nginx          1235    www     *:80                 LISTEN
 ```
 
+### Opening a port in browser
+1. Navigate to the process using arrow keys
+2. Press **o**
+3. The port's URL will open in your default browser
+4. Uses custom link from config if available, otherwise defaults to `http://localhost:PORT`
+
 ### Killing a process
 1. Navigate to the process using arrow keys
-2. Press Enter
-3. The process will be terminated (SIGTERM first, then SIGKILL if needed)
+2. Press **Enter**
+3. The process will be terminated (SIGKILL)
 4. Status message will show the result
-5. Press q to exit application.
+
+### Refreshing and configuration
+- Press **r** to manually refresh the port list
+- Press **x** to reload the configuration file (useful after editing config)
+- Press **c** to see the configuration file path
 
 ## Dependencies
 
