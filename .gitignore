@@ -17,6 +17,7 @@ portmon.exe
 
 # Dependency directories
 vendor/
+internal/
 
 # Go workspace file
 go.work
