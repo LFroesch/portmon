@@ -4,19 +4,25 @@ A live port monitoring tool built with Go that provides a real-time, interactive
 
 ## Features
 
-- **Real-time monitoring** - Updates every 2 seconds automatically
+- **Real-time monitoring** - Configurable auto-refresh interval (default 2 seconds)
 - **Interactive TUI** - Built with Bubble Tea for a smooth terminal experience
-- **Process management** - Kill processes directly from the interface
+- **Process management** - Kill processes with confirmation and graceful termination (SIGTERM → SIGKILL)
 - **Smart categorization** - Separates user processes from system processes
 - **Responsive design** - Adapts to terminal window size
 - **Multiple data sources** - Uses both `netstat` and `lsof` for comprehensive port information
+- **Cross-platform** - Works on Linux, macOS, and Windows
+- **Help screen** - Press `?` for interactive help
+- **Safety features** - Confirmation dialogs before killing processes
 
 ## Installation
 
 ### Prerequisites
 
 - Go 1.23.3 or later
-- Linux/Unix system with `netstat` or `lsof` available
+- One of the following systems:
+  - **Linux** with `netstat` or `lsof` available
+  - **macOS** with `lsof` (usually pre-installed)
+  - **Windows** with appropriate network tools
 
 ### Build from source
 
@@ -56,12 +62,17 @@ portmon
 ### Controls
 
 - **Arrow keys** or **j/k** - Navigate through the port list
-- **Enter** - Kill the selected process (with confirmation)
-- **o** - Open the port's URL in your default browser
+- **?** - Show help screen with all keyboard shortcuts
+- **Enter** - Kill the selected process (shows confirmation dialog)
+- **o** - Open the port's URL in your default browser (cross-platform)
 - **r** - Manually refresh the port list
 - **x** - Reload configuration file
 - **c** - Show configuration file path
 - **q** or **Ctrl+C** - Quit the application
+
+**In confirmation dialog:**
+- **Y** - Confirm kill process
+- **N** or **Esc** - Cancel
 
 ### Interface
 
@@ -85,6 +96,7 @@ The configuration file (`~/.config/portmon/config.json`) allows you to customize
 
 ```json
 {
+  "refresh_interval": 2,
   "port_mappings": [
     {
       "port": "3000",
@@ -106,6 +118,10 @@ The configuration file (`~/.config/portmon/config.json`) allows you to customize
 
 ### Configuration Options
 
+**Global Settings:**
+- **refresh_interval**: Auto-refresh interval in seconds (default: 2)
+
+**Port Mapping Options:**
 - **port**: The port number to customize
 - **custom_name**: Display name for the port (shown in the Process column)
 - **description**: Description of what runs on this port
@@ -177,9 +193,11 @@ Port    Protocol Process         PID     User    Address              Status
 - User information retrieved via `ps -o user=`
 
 ### Process Termination
-- Graceful termination with SIGTERM first
-- Force termination with SIGKILL if SIGTERM fails
-- Real-time status feedback
+- Confirmation dialog before terminating any process
+- Graceful termination with SIGTERM first (2-second timeout)
+- Automatic force termination with SIGKILL if SIGTERM fails
+- Real-time status feedback with detailed messages
+- Process validation before termination
 
 ### Performance
 - Lightweight Go binary
