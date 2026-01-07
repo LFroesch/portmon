@@ -16,29 +16,21 @@ A live port monitoring tool built with Go that provides a real-time, interactive
 
 ## Installation
 
+```bash
+go install github.com/LFroesch/portmon@latest
+```
+
+Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
+```bash
+export PATH="$HOME/go/bin:$PATH"
+```
+
 ### Prerequisites
 
-- Go 1.23.3 or later
 - One of the following systems:
   - **Linux** with `netstat` or `lsof` available
   - **macOS** with `lsof` (usually pre-installed)
   - **Windows** with appropriate network tools
-
-### Build from source
-
-```bash
-git clone <repository-url>
-cd portmon
-go build -o portmon
-```
-
-### Install to local bin
-
-```bash
-# Build and copy to local bin directory
-go build -o portmon
-cp portmon ~/.local/bin/
-```
 
 ### Configuration
 

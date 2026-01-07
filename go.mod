@@ -1,4 +1,4 @@
-module portmon
+module github.com/LFroesch/portmon
 
 go 1.23.3
 
