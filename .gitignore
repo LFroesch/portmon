@@ -1,8 +1,4 @@
-# Binaries
-portmon
-portmon.exe
-
-# Go build artifacts
+# Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
@@ -15,20 +11,29 @@ portmon.exe
 # Output of the go coverage tool
 *.out
 
-# Dependency directories
-vendor/
-internal/
-
 # Go workspace file
 go.work
 
-# IDE
-.vscode/
-.idea/
+# Built binaries (app-specific)
+backup-xd
+dwight
+git-helper
+lif
+logdog
+portmon
+project-launcher
+scout
+scriptgodx
+zap
+
+# OS files
+.DS_Store
+Thumbs.db
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
+# IDE
+.vscode/
+.idea/
+*.iml
