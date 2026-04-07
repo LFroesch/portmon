@@ -1,90 +1,74 @@
-# Portmon 🔍
+# Portmon
 
-A live port monitoring tool built with Go that provides a real-time, interactive terminal interface for viewing and managing network ports and their associated processes.
+Live port monitor and system stats dashboard for the terminal. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-## Features
+See what's running on your ports, kill processes, and monitor system resources — all from one TUI.
 
-- **Real-time monitoring** - Configurable auto-refresh interval (default 2 seconds)
-- **Interactive TUI** - Built with Bubble Tea for a smooth terminal experience
-- **Process management** - Kill processes with confirmation and graceful termination (SIGTERM → SIGKILL)
-- **Smart categorization** - Separates user processes from system processes
-- **Responsive design** - Adapts to terminal window size
-- **Multiple data sources** - Uses both `netstat` and `lsof` for comprehensive port information
-- **Cross-platform** - Works on Linux, macOS, and Windows
-- **Help screen** - Press `?` for interactive help
-- **Safety features** - Confirmation dialogs before killing processes
-
-## Installation
+## Install
 
 ```bash
 go install github.com/LFroesch/portmon@latest
 ```
 
-Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
-```bash
-export PATH="$HOME/go/bin:$PATH"
-```
-
-### Prerequisites
-
-- One of the following systems:
-  - **Linux** with `netstat` or `lsof` available
-  - **macOS** with `lsof` (usually pre-installed)
-  - **Windows** with appropriate network tools
-
-### Configuration
-
-Portmon creates a configuration file at `~/.config/portmon/config.json` on first run. This file allows you to customize port names, descriptions, and links.
+Or build from source:
 
 ```bash
-# Edit the configuration file
-nano ~/.config/portmon/config.json
+make install
 ```
-
-Make sure `~/.local/bin` is in your PATH.
 
 ## Usage
 
-### Basic usage
-
 ```bash
-portmon
+portmon        # launch TUI
+sudo portmon   # with elevated privileges (see all processes)
 ```
 
-### Controls
+## Tabs
 
-- **Arrow keys** or **j/k** - Navigate through the port list
-- **?** - Show help screen with all keyboard shortcuts
-- **Enter** - Kill the selected process (shows confirmation dialog)
-- **o** - Open the port's URL in your default browser (cross-platform)
-- **r** - Manually refresh the port list
-- **x** - Reload configuration file
-- **c** - Show configuration file path
-- **q** or **Ctrl+C** - Quit the application
+### Ports Tab
+Live table of active ports with process info:
 
-**In confirmation dialog:**
-- **Y** - Confirm kill process
-- **N** or **Esc** - Cancel
+| Column | Description |
+|--------|-------------|
+| Port | Port number |
+| Protocol | TCP/UDP |
+| Process | Process name (or custom name from config) |
+| PID | Process ID |
+| CPU% | Process CPU usage |
+| MEM% | Process memory usage |
+| User | Process owner |
+| Address | Bind address |
+| Status | Connection status |
 
-### Interface
+Ports are split into two sections:
+- **Custom** — Named ports from your config (dev servers, databases, etc.)
+- **System** — Everything else
 
-The interface displays ports in two sections:
+### Stats Tab
+btop-style system dashboard:
+- CPU/MEM/SWAP usage bars with sparklines
+- Disk usage (deduped by device)
+- Network rx/tx rates with sparklines
+- System info (hostname, kernel, uptime, load average)
+- Top 5 processes by CPU
 
-1. **User Processes** - Development servers, applications you're running
-2. **System Processes** - System services, daemons
+## Keybindings
 
-Each entry shows:
-- **Port** - The port number
-- **Protocol** - TCP/UDP
-- **Process** - Process name
-- **PID** - Process ID
-- **User** - User running the process
-- **Address** - Bind address (simplified display)
-- **Status** - Connection status
+| Key | Action |
+|-----|--------|
+| `tab`, `1/2` | Switch tabs (Ports / Stats) |
+| `j/k`, `up/down` | Navigate |
+| `enter` | Kill process (with confirmation) |
+| `o` | Open port URL in browser |
+| `r` | Refresh |
+| `x` | Reload config |
+| `c` | Show config path |
+| `?` | Help |
+| `q`, `ctrl+c` | Quit |
 
-## Configuration File
+## Configuration
 
-The configuration file (`~/.config/portmon/config.json`) allows you to customize how ports are displayed:
+Config file: `~/.config/portmon/config.json` (created on first run)
 
 ```json
 {
@@ -93,127 +77,28 @@ The configuration file (`~/.config/portmon/config.json`) allows you to customize
     {
       "port": "3000",
       "custom_name": "React App",
-      "description": "Frontend development server",
+      "description": "Frontend dev server",
       "hidden": false,
       "link": "http://localhost:3000"
-    },
-    {
-      "port": "5000",
-      "custom_name": "API Server",
-      "description": "Backend REST API",
-      "hidden": false,
-      "link": "http://localhost:5000/api"
     }
   ]
 }
 ```
 
-### Configuration Options
+| Field | Description | Default |
+|-------|-------------|---------|
+| `refresh_interval` | Auto-refresh seconds | 2 |
+| `port_mappings[].port` | Port number to customize | — |
+| `port_mappings[].custom_name` | Display name | — |
+| `port_mappings[].description` | Description | — |
+| `port_mappings[].hidden` | Hide from display | false |
+| `port_mappings[].link` | URL for `o` key | `http://localhost:PORT` |
 
-**Global Settings:**
-- **refresh_interval**: Auto-refresh interval in seconds (default: 2)
+## Requirements
 
-**Port Mapping Options:**
-- **port**: The port number to customize
-- **custom_name**: Display name for the port (shown in the Process column)
-- **description**: Description of what runs on this port
-- **hidden**: Set to `true` to hide this port from the display
-- **link**: Custom URL to open when pressing 'o' (defaults to `http://localhost:PORT`)
+- Linux with `netstat` or `lsof` (stats tab requires `/proc` filesystem)
+- macOS: port scanning works via `lsof`, stats tab is Linux-only
 
-## Smart Process Detection
+## License
 
-Portmon intelligently categorizes processes to show your development work first:
-
-### User Processes (shown first)
-- Development servers: `node`, `python`, `go`, `php`, `ruby`
-- Build tools: `npm`, `yarn`, `webpack`, `vite`
-- Databases: `mysql`, `postgres`, `redis`, `mongodb`
-- Web servers: `nginx`, `apache`
-- Docker containers
-- Common development ports (3000-3999, 4000-4999, 5000-5999, 8000-8999, 9000-9999)
-
-### System Processes (shown after)
-- System services
-- Processes owned by system users (`root`, `daemon`, `www-data`, etc.)
-
-## Examples
-
-### Typical development scenario
-```
-🔍 Portmon - Live Port Monitor
-
-Port    Protocol Process         PID     User    Address              Status
-════════════════════════════════════════════════════════════════════════════
-        ═══ USER PROCESSES ═══
-3000    TCP      node           12345   lucas   localhost:3000       LISTEN
-5432    TCP      postgres       12346   lucas   localhost:5432       LISTEN
-6379    TCP      redis          12347   lucas   localhost:6379       LISTEN
-
-        ═══ SYSTEM PROCESSES ═══
-22      TCP      ssh            1234    root    *:22                 LISTEN
-80      TCP      nginx          1235    www     *:80                 LISTEN
-```
-
-### Opening a port in browser
-1. Navigate to the process using arrow keys
-2. Press **o**
-3. The port's URL will open in your default browser
-4. Uses custom link from config if available, otherwise defaults to `http://localhost:PORT`
-
-### Killing a process
-1. Navigate to the process using arrow keys
-2. Press **Enter**
-3. The process will be terminated (SIGKILL)
-4. Status message will show the result
-
-### Refreshing and configuration
-- Press **r** to manually refresh the port list
-- Press **x** to reload the configuration file (useful after editing config)
-- Press **c** to see the configuration file path
-
-## Dependencies
-
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
-- [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - Style and layout
-
-## Technical Details
-
-### Data Collection
-- Primary: `netstat -tulpn` for comprehensive port information
-- Fallback: `lsof -i -P -n` if netstat is unavailable
-- User information retrieved via `ps -o user=`
-
-### Process Termination
-- Confirmation dialog before terminating any process
-- Graceful termination with SIGTERM first (2-second timeout)
-- Automatic force termination with SIGKILL if SIGTERM fails
-- Real-time status feedback with detailed messages
-- Process validation before termination
-
-### Performance
-- Lightweight Go binary
-- Efficient terminal rendering
-- Minimal system resource usage
-
-
-## Troubleshooting
-
-### Permission Issues
-If you can't kill certain processes, you may need elevated privileges:
-```bash
-sudo portmon
-```
-
-### Missing Commands
-Ensure `netstat` or `lsof` is available:
-```bash
-# On Ubuntu/Debian
-sudo apt-get install net-tools
-
-# For lsof
-sudo apt-get install lsof
-```
-
-### Display Issues
-If the interface appears corrupted, try resizing your terminal or restarting the application.
+[AGPL-3.0](LICENSE)
