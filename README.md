@@ -33,16 +33,11 @@ Command:
 ```bash
 portmon
 ```
-## Usage
-
-```bash
-portmon        # launch TUI
-sudo portmon   # with elevated privileges (see all processes)
-```
 
 ## Tabs
 
 ### Ports Tab
+
 Live table of active ports with process info:
 
 | Column | Description |
@@ -58,11 +53,14 @@ Live table of active ports with process info:
 | Status | Connection status |
 
 Ports are split into two sections:
+
 - **Custom** — Named ports from your config (dev servers, databases, etc.)
 - **System** — Everything else
 
 ### Stats Tab
+
 btop-style system dashboard:
+
 - CPU/MEM/SWAP usage bars with sparklines
 - Disk usage (deduped by device)
 - Network rx/tx rates with sparklines
