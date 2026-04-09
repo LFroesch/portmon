@@ -4,6 +4,33 @@ Live port monitor and system stats dashboard for the terminal. Built with Go and
 
 See what's running on your ports, kill processes, and monitor system resources — all from one TUI.
 
+## Quick Install
+
+Recommended (installs to `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LFroesch/portmon/main/install.sh | bash
+```
+
+Or download a binary from [GitHub Releases](https://github.com/LFroesch/portmon/releases).
+
+Or install with Go:
+
+```bash
+go install github.com/LFroesch/portmon@latest
+```
+
+Or build from source:
+
+```bash
+make install
+```
+
+Command:
+
+```bash
+portmon
+```
 ## Install
 
 ```bash
