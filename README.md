@@ -33,18 +33,6 @@ Command:
 ```bash
 portmon
 ```
-## Install
-
-```bash
-go install github.com/LFroesch/portmon@latest
-```
-
-Or build from source:
-
-```bash
-make install
-```
-
 ## Usage
 
 ```bash
