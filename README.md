@@ -6,6 +6,8 @@ See what's running on your ports, kill processes, and monitor system resources â
 
 ## Quick Install
 
+Supported platforms: Linux (full support) and macOS (port scanning only; stats dashboard is Linux-only). On Windows, use WSL.
+
 Recommended (installs to `~/.local/bin`):
 
 ```bash
