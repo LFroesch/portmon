@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -70,6 +69,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	if m.tab == TabPorts && m.filterInput && key != "ctrl+c" {
+		return m.handlePortsKey(msg)
+	}
+
 	switch key {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -102,6 +105,40 @@ func (m *model) handlePortsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.labelEditor {
+		switch msg.String() {
+		case "esc":
+			m.labelEditor = false
+			return m, nil
+		case "enter":
+			if err := m.updatePortLabel(m.labelEditPort, m.labelInput); err != nil {
+				m.statusMsg = "Error: " + err.Error()
+				return m, nil
+			}
+			m.labelEditor = false
+			m.buildTableRows()
+			if strings.TrimSpace(m.labelInput) == "" {
+				m.statusMsg = fmt.Sprintf("Cleared custom label for port %s", m.labelEditPort)
+			} else {
+				m.statusMsg = fmt.Sprintf("Saved label for port %s", m.labelEditPort)
+			}
+			return m, nil
+		case "backspace":
+			runes := []rune(m.labelInput)
+			if len(runes) > 0 {
+				m.labelInput = string(runes[:len(runes)-1])
+			}
+			return m, nil
+		case "ctrl+u":
+			m.labelInput = ""
+			return m, nil
+		}
+		if len(msg.Runes) > 0 && !msg.Alt {
+			m.labelInput += string(msg.Runes)
+		}
+		return m, nil
+	}
+
 	if m.showConfirmation {
 		switch msg.String() {
 		case "y", "Y":
@@ -114,11 +151,50 @@ func (m *model) handlePortsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.filterInput {
+		switch msg.String() {
+		case "esc":
+			m.filterInput = false
+			return m, nil
+		case "enter":
+			m.filterInput = false
+			return m, nil
+		case "backspace":
+			runes := []rune(m.filterQuery)
+			if len(runes) > 0 {
+				m.filterQuery = string(runes[:len(runes)-1])
+				m.buildTableRows()
+			}
+			return m, nil
+		}
+		if len(msg.Runes) > 0 && !msg.Alt {
+			m.filterQuery += string(msg.Runes)
+			m.buildTableRows()
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "q":
 		return m, tea.Quit
 	case "?":
 		m.showHelp = true
+	case "e":
+		details, ok := m.selectedPortDetails()
+		if !ok {
+			m.statusMsg = "No port selected"
+			return m, nil
+		}
+		m.labelEditor = true
+		m.labelEditPort = details.Port.Port
+		m.labelInput = details.Mapping.CustomName
+		if m.labelInput == "" && details.HasBuiltinMapping {
+			m.labelInput = details.Mapping.CustomName
+		}
+		return m, nil
+	case "/":
+		m.filterInput = true
+		return m, nil
 	case "r":
 		return m, tea.Batch(
 			m.updatePorts(),
@@ -132,30 +208,30 @@ func (m *model) handlePortsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		)
 	case "c":
 		m.statusMsg = fmt.Sprintf("Config: %s", m.configFile)
+	case "esc":
+		if m.filterQuery != "" {
+			m.filterQuery = ""
+			m.buildTableRows()
+		}
 	case "o":
-		if len(m.ports) > 0 {
-			selected := m.table.SelectedRow()
-			if len(selected) > 0 && selected[0] != "" && !strings.Contains(selected[2], "===") {
-				port := selected[0]
-				if _, _, _, link := m.getCustomName(port); link != "" {
-					return m, m.openLink(link, port)
-				}
-				return m, m.openLink(fmt.Sprintf("http://localhost:%s", port), port)
+		if details, ok := m.selectedPortDetails(); ok {
+			if details.Mapping.Link != "" {
+				return m, m.openLink(details.Mapping.Link, details.Port.Port)
 			}
+			return m, m.openLink(fmt.Sprintf("http://localhost:%s", details.Port.Port), details.Port.Port)
 		}
+		m.statusMsg = "No port selected"
 	case "enter":
-		if len(m.ports) > 0 {
-			selected := m.table.SelectedRow()
-			if len(selected) > 3 && selected[3] != "" && !strings.Contains(selected[2], "===") {
-				pid, err := strconv.Atoi(selected[3])
-				if err == nil && pid > 0 {
-					m.showConfirmation = true
-					m.confirmPID = pid
-					m.confirmProcess = selected[2]
-					m.confirmPort = selected[0]
-				}
+		if details, ok := m.selectedPortDetails(); ok {
+			if details.Port.PID > 0 {
+				m.showConfirmation = true
+				m.confirmPID = details.Port.PID
+				m.confirmProcess = details.DisplayName
+				m.confirmPort = details.Port.Port
+				return m, nil
 			}
 		}
+		m.statusMsg = "No process selected"
 	default:
 		var cmd tea.Cmd
 		m.table, cmd = m.table.Update(msg)

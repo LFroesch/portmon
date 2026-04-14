@@ -20,10 +20,12 @@ func (m model) View() string {
 	case TabPorts:
 		if m.showHelp {
 			content = m.renderHelp()
+		} else if m.labelEditor {
+			content = m.renderLabelEditor()
 		} else if m.showConfirmation {
 			content = m.renderConfirmation()
 		} else {
-			content = m.table.View()
+			content = m.renderPorts()
 		}
 	case TabStats:
 		contentH := m.height - 4
@@ -67,7 +69,8 @@ func (m model) renderStatus() string {
 	case TabPorts:
 		keys := []struct{ key, action string }{
 			{"?", "help"}, {"q", "quit"}, {"enter", "kill"},
-			{"o", "open"}, {"r", "refresh"}, {"tab", "stats"},
+			{"o", "open"}, {"e", "label"}, {"/", "filter"},
+			{"r", "refresh"}, {"tab", "stats"},
 		}
 		for i, k := range keys {
 			if i > 0 {
@@ -90,6 +93,31 @@ func (m model) renderStatus() string {
 		bar += "  " + statusMsgStyle.Render("> "+m.statusMsg)
 	}
 	return bar
+}
+
+func (m model) renderPorts() string {
+	panelWidth := m.width - 2
+	if panelWidth < 20 {
+		panelWidth = 20
+	}
+
+	filterLabel := "Filter"
+	if m.filterInput {
+		filterLabel = "Filter*"
+	}
+	filterValue := m.filterQuery
+	if filterValue == "" {
+		filterValue = dimTextStyle.Render("type to filter by port, process, label, user...")
+	}
+
+	filterBar := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorDim).
+		Padding(0, 1).
+		Width(panelWidth).
+		Render(fmt.Sprintf("%s %s", sectionStyle.Render(filterLabel), filterValue))
+
+	return lipgloss.JoinVertical(lipgloss.Left, filterBar, m.table.View())
 }
 
 func (m *model) renderStats(maxH int) string {
@@ -232,6 +260,7 @@ func (m model) renderHelp() string {
 		{"↑/↓, j/k", "Navigate ports"},
 		{"enter", "Kill selected process"},
 		{"o", "Open port URL in browser"},
+		{"e", "Edit or clear saved port label"},
 		{"r", "Refresh port list"},
 		{"x", "Reload config file"},
 		{"c", "Show config path"},
@@ -258,6 +287,46 @@ func (m model) renderHelp() string {
 		helpStyle.Render(strings.Join(lines, "\n")))
 }
 
+func (m model) renderLabelEditor() string {
+	dialogStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorPrimary).
+		Padding(1, 2).
+		Width(minInt(m.width-6, 72))
+
+	details, ok := m.selectedPortDetails()
+	if !ok {
+		return lipgloss.Place(m.width, m.height-4, lipgloss.Center, lipgloss.Center,
+			dialogStyle.Render("No port selected"))
+	}
+
+	current := "none"
+	if details.Mapping.CustomName != "" {
+		current = details.Mapping.CustomName
+	}
+	input := m.labelInput
+	if input == "" {
+		input = dimTextStyle.Render("blank removes the custom override")
+	}
+
+	lines := []string{
+		sectionStyle.Render("Edit Port Label"),
+		"",
+		fmt.Sprintf("%s  %s", keyStyle.Render("Port"), actionStyle.Render(details.Port.Port+"/"+strings.ToLower(details.Port.Protocol))),
+		fmt.Sprintf("%s  %s", keyStyle.Render("Process"), details.DisplayProcess),
+		fmt.Sprintf("%s  %s", keyStyle.Render("Current"), current),
+		fmt.Sprintf("%s  %s", keyStyle.Render("Label*"), input),
+	}
+	if details.Mapping.Description != "" {
+		lines = append(lines, fmt.Sprintf("%s  %s", keyStyle.Render("About"), details.Mapping.Description))
+	}
+	lines = append(lines, "", dimTextStyle.Render("enter saves  esc cancels  ctrl+u clears input"))
+
+	return lipgloss.Place(m.width, m.height-4,
+		lipgloss.Center, lipgloss.Center,
+		dialogStyle.Render(strings.Join(lines, "\n")))
+}
+
 func (m model) renderConfirmation() string {
 	dialogStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -273,6 +342,13 @@ func (m model) renderConfirmation() string {
 	return lipgloss.Place(m.width, m.height-4,
 		lipgloss.Center, lipgloss.Center,
 		dialogStyle.Render(text))
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func formatDuration(d time.Duration) string {

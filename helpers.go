@@ -19,6 +19,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var builtinPortMappings = map[string]PortMapping{
+	"22":  {Port: "22", CustomName: "SSH", Description: "Secure Shell"},
+	"25":  {Port: "25", CustomName: "SMTP", Description: "Mail transfer"},
+	"53":  {Port: "53", CustomName: "DNS", Description: "Domain name service"},
+	"80":  {Port: "80", CustomName: "HTTP", Description: "Web server"},
+	"110": {Port: "110", CustomName: "POP3", Description: "Post Office Protocol"},
+	"123": {Port: "123", CustomName: "NTP", Description: "Network time"},
+	"143": {Port: "143", CustomName: "IMAP", Description: "Mail access"},
+	"443": {Port: "443", CustomName: "HTTPS", Description: "Secure web server"},
+	"465": {Port: "465", CustomName: "SMTPS", Description: "Secure mail transfer"},
+	"587": {Port: "587", CustomName: "SMTP Submit", Description: "Mail submission"},
+	"631": {Port: "631", CustomName: "IPP", Description: "Printing service"},
+	"993": {Port: "993", CustomName: "IMAPS", Description: "Secure mail access"},
+	"995": {Port: "995", CustomName: "POP3S", Description: "Secure POP3"},
+}
+
 // --- Config ---
 
 func loadPortConfig(configFile string) PortConfig {
@@ -55,6 +71,42 @@ func loadPortConfig(configFile string) PortConfig {
 	return config
 }
 
+func savePortConfig(configFile string, config PortConfig) error {
+	configDir := filepath.Dir(configFile)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(configDir, "config-*.json")
+	if err != nil {
+		return err
+	}
+	tmpName := tmpFile.Name()
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0644); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, configFile); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
 // --- Table helpers ---
 
 func (m *model) getCustomName(port string) (string, string, bool, string) {
@@ -62,6 +114,9 @@ func (m *model) getCustomName(port string) (string, string, bool, string) {
 		if mapping.Port == port {
 			return mapping.CustomName, mapping.Description, mapping.Hidden, mapping.Link
 		}
+	}
+	if mapping, ok := builtinPortMappings[port]; ok {
+		return mapping.CustomName, mapping.Description, mapping.Hidden, mapping.Link
 	}
 	return "", "", false, ""
 }
@@ -98,6 +153,7 @@ func (m *model) resizeTable() {
 
 func (m *model) buildTableRows() {
 	var customPorts, systemPorts []Port
+	prevPort, hasPrev := m.selectedPort()
 
 	customPortSet := make(map[string]bool)
 	for _, mapping := range m.portConfig.Mappings {
@@ -116,6 +172,9 @@ func (m *model) buildTableRows() {
 
 	for _, port := range m.ports {
 		if _, _, hidden, _ := m.getCustomName(port.Port); hidden {
+			continue
+		}
+		if !m.matchesFilter(port) {
 			continue
 		}
 
@@ -137,6 +196,7 @@ func (m *model) buildTableRows() {
 	sortByPort(systemPorts)
 
 	var rows []table.Row
+	var meta []portRowMeta
 
 	addSection := func(label string, ports []Port) {
 		if len(ports) == 0 {
@@ -144,8 +204,10 @@ func (m *model) buildTableRows() {
 		}
 		if len(rows) > 0 {
 			rows = append(rows, table.Row{"", "", "", "", "", "", "", "", ""})
+			meta = append(meta, portRowMeta{kind: portRowSpacer})
 		}
 		rows = append(rows, table.Row{"", "", fmt.Sprintf("=== %s ===", label), "", "", "", "", "", ""})
+		meta = append(meta, portRowMeta{kind: portRowSection})
 		for _, p := range ports {
 			name := cleanProcessName(p.Process)
 			if customName, _, _, _ := m.getCustomName(p.Port); customName != "" {
@@ -161,13 +223,46 @@ func (m *model) buildTableRows() {
 				strconv.Itoa(p.PID), cpuPct, memPct,
 				p.User, cleanAddress(p.LocalAddr), p.Status,
 			})
+			meta = append(meta, portRowMeta{kind: portRowData, port: p})
 		}
 	}
 
 	addSection("CUSTOM", customPorts)
 	addSection("SYSTEM", systemPorts)
 
+	m.portRows = meta
 	m.table.SetRows(rows)
+	m.restoreSelection(prevPort, hasPrev)
+}
+
+func (m model) matchesFilter(port Port) bool {
+	query := strings.TrimSpace(strings.ToLower(m.filterQuery))
+	if query == "" {
+		return true
+	}
+
+	name, desc, _, link := m.getCustomName(port.Port)
+	candidates := []string{
+		port.Port,
+		port.Protocol,
+		port.Process,
+		cleanProcessName(port.Process),
+		port.User,
+		port.LocalAddr,
+		port.Status,
+		name,
+		desc,
+		link,
+	}
+	for _, candidate := range candidates {
+		if strings.Contains(strings.ToLower(candidate), query) {
+			return true
+		}
+	}
+	if port.PID > 0 && strings.Contains(strconv.Itoa(port.PID), query) {
+		return true
+	}
+	return false
 }
 
 func (m model) countPortSections() (custom, system int) {
@@ -188,6 +283,129 @@ func (m model) countPortSections() (custom, system int) {
 		}
 	}
 	return
+}
+
+type SelectedPortDetails struct {
+	Port              Port
+	Row               table.Row
+	Mapping           PortMapping
+	DisplayName       string
+	DisplayProcess    string
+	HasCustomMapping  bool
+	HasBuiltinMapping bool
+}
+
+func (m model) selectedPort() (Port, bool) {
+	cursor := m.table.Cursor()
+	if cursor < 0 || cursor >= len(m.portRows) {
+		return Port{}, false
+	}
+	if m.portRows[cursor].kind != portRowData {
+		return Port{}, false
+	}
+	return m.portRows[cursor].port, true
+}
+
+func (m model) selectedPortDetails() (SelectedPortDetails, bool) {
+	port, ok := m.selectedPort()
+	if !ok {
+		return SelectedPortDetails{}, false
+	}
+
+	details := SelectedPortDetails{
+		Port:           port,
+		DisplayProcess: cleanProcessName(port.Process),
+	}
+	if rows := m.table.Rows(); m.table.Cursor() >= 0 && m.table.Cursor() < len(rows) {
+		row := rows[m.table.Cursor()]
+		details.Row = row
+		if len(row) > 2 {
+			details.DisplayName = row[2]
+		}
+	}
+
+	for _, mapping := range m.portConfig.Mappings {
+		if mapping.Port == port.Port {
+			details.Mapping = mapping
+			details.HasCustomMapping = true
+			return details, true
+		}
+	}
+	if mapping, ok := builtinPortMappings[port.Port]; ok {
+		details.Mapping = mapping
+		details.HasBuiltinMapping = true
+	}
+	return details, true
+}
+
+func (m *model) restoreSelection(prev Port, hasPrev bool) {
+	if len(m.portRows) == 0 {
+		m.table.SetCursor(0)
+		return
+	}
+
+	if hasPrev {
+		for i, row := range m.portRows {
+			if row.kind != portRowData {
+				continue
+			}
+			if row.port.Port == prev.Port && row.port.PID == prev.PID && row.port.Protocol == prev.Protocol {
+				m.table.SetCursor(i)
+				return
+			}
+		}
+	}
+
+	cursor := m.table.Cursor()
+	if cursor < 0 {
+		cursor = 0
+	}
+	for i := cursor; i < len(m.portRows); i++ {
+		if m.portRows[i].kind == portRowData {
+			m.table.SetCursor(i)
+			return
+		}
+	}
+	for i := cursor - 1; i >= 0; i-- {
+		if m.portRows[i].kind == portRowData {
+			m.table.SetCursor(i)
+			return
+		}
+	}
+	m.table.SetCursor(0)
+}
+
+func (m *model) updatePortLabel(port, label string) error {
+	label = strings.TrimSpace(label)
+
+	index := -1
+	for i, mapping := range m.portConfig.Mappings {
+		if mapping.Port == port {
+			index = i
+			break
+		}
+	}
+
+	if index >= 0 {
+		m.portConfig.Mappings[index].CustomName = label
+		mapping := m.portConfig.Mappings[index]
+		if mapping.CustomName == "" && mapping.Description == "" && mapping.Link == "" && !mapping.Hidden {
+			m.portConfig.Mappings = append(m.portConfig.Mappings[:index], m.portConfig.Mappings[index+1:]...)
+		}
+	} else if label != "" {
+		m.portConfig.Mappings = append(m.portConfig.Mappings, PortMapping{Port: port, CustomName: label})
+	}
+
+	sort.SliceStable(m.portConfig.Mappings, func(i, j int) bool {
+		pi, errI := strconv.Atoi(m.portConfig.Mappings[i].Port)
+		pj, errJ := strconv.Atoi(m.portConfig.Mappings[j].Port)
+		if errI == nil && errJ == nil {
+			return pi < pj
+		}
+		return m.portConfig.Mappings[i].Port < m.portConfig.Mappings[j].Port
+	})
+
+	return savePortConfig(m.configFile, m.portConfig)
 }
 
 // --- Commands ---
@@ -372,30 +590,46 @@ func parseNetstatOutput(output string) []Port {
 func parseLsofOutput(output string) []Port {
 	var ports []Port
 	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, "LISTEN") || strings.Contains(line, "TCP") {
-			fields := strings.Fields(line)
-			if len(fields) >= 9 {
-				port := Port{
-					Process:  fields[0],
-					Status:   "LISTEN",
-					Protocol: "TCP",
-					User:     "unknown",
-				}
-				if pid, err := strconv.Atoi(fields[1]); err == nil {
-					port.PID = pid
-				}
-				if len(fields) > 2 {
-					port.User = fields[2]
-				}
-				if len(fields) > 8 {
-					port.LocalAddr = fields[8]
-					if idx := strings.LastIndex(fields[8], ":"); idx != -1 {
-						port.Port = fields[8][idx+1:]
-					}
-				}
-				ports = append(ports, port)
+		fields := strings.Fields(line)
+		if len(fields) < 9 {
+			continue
+		}
+		protoIdx := -1
+		for i, field := range fields {
+			if field == "TCP" || field == "UDP" {
+				protoIdx = i
+				break
 			}
 		}
+		if protoIdx == -1 || protoIdx+1 >= len(fields) {
+			continue
+		}
+
+		port := Port{
+			Process:  fields[0],
+			Protocol: fields[protoIdx],
+			Status:   strings.Trim(fields[len(fields)-1], "()"),
+			User:     "unknown",
+		}
+		if port.Protocol == "UDP" {
+			port.Status = "ACTIVE"
+		}
+		if pid, err := strconv.Atoi(fields[1]); err == nil {
+			port.PID = pid
+		}
+		if len(fields) > 2 {
+			port.User = fields[2]
+		}
+
+		nameField := fields[protoIdx+1]
+		port.LocalAddr = nameField
+		if idx := strings.LastIndex(nameField, ":"); idx != -1 {
+			port.Port = strings.TrimRight(nameField[idx+1:], ")")
+		}
+		if port.Port == "" {
+			continue
+		}
+		ports = append(ports, port)
 	}
 	return ports
 }

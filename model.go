@@ -14,7 +14,7 @@ const (
 	EphemeralPortThreshold = 10000
 	MinTableHeight         = 5
 	MinProcessWidth        = 15
-	TableHeightPad         = 8
+	TableHeightPad         = 15
 	AvailableWidthPad      = 15
 	SIGTERMTimeout         = 2 * time.Second
 	SparklineHistory       = 60
@@ -56,6 +56,19 @@ type PortConfig struct {
 	RefreshInterval int           `json:"refresh_interval"`
 }
 
+type portRowKind int
+
+const (
+	portRowSpacer portRowKind = iota
+	portRowSection
+	portRowData
+)
+
+type portRowMeta struct {
+	kind portRowKind
+	port Port
+}
+
 type model struct {
 	width  int
 	height int
@@ -63,15 +76,21 @@ type model struct {
 
 	table            table.Model
 	ports            []Port
+	portRows         []portRowMeta
 	portConfig       PortConfig
 	configFile       string
 	lastUpdate       time.Time
 	statusMsg        string
 	showHelp         bool
 	showConfirmation bool
+	labelEditor      bool
 	confirmPID       int
 	confirmProcess   string
 	confirmPort      string
+	filterQuery      string
+	filterInput      bool
+	labelEditPort    string
+	labelInput       string
 
 	cpuSpark    *Sparkline
 	memSpark    *Sparkline

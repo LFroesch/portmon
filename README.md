@@ -57,6 +57,12 @@ Ports are split into two sections:
 - **Custom** — Named ports from your config (dev servers, databases, etc.)
 - **System** — Everything else
 
+The Ports tab also includes:
+
+- Inline filter/search with `/`
+- Built-in labels only for canonical service ports like `22`, `53`, `80`, and `443`
+- `e` in-app label editor for saving or clearing custom port names
+
 ### Stats Tab
 
 btop-style system dashboard:
@@ -72,7 +78,9 @@ btop-style system dashboard:
 | Key | Action |
 |-----|--------|
 | `tab`, `1/2` | Switch tabs (Ports / Stats) |
+| `/` | Filter ports by port, process, label, user, PID, or address |
 | `j/k`, `up/down` | Navigate |
+| `e` | Edit or clear saved label for selected port |
 | `enter` | Kill process (with confirmation) |
 | `o` | Open port URL in browser |
 | `r` | Refresh |
@@ -108,6 +116,10 @@ Config file: `~/.config/portmon/config.json` (created on first run)
 | `port_mappings[].description` | Description | — |
 | `port_mappings[].hidden` | Hide from display | false |
 | `port_mappings[].link` | URL for `o` key | `http://localhost:PORT` |
+
+Config mappings override the built-in canonical port labels.
+
+You can also press `e` on the Ports tab to write `custom_name` entries back to the config file directly from the TUI. Saving a blank label clears that custom override.
 
 ## Requirements
 
