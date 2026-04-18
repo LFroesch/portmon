@@ -14,7 +14,7 @@ const (
 	EphemeralPortThreshold = 10000
 	MinTableHeight         = 5
 	MinProcessWidth        = 15
-	TableHeightPad         = 15
+	TableHeightPad         = 7
 	AvailableWidthPad      = 15
 	SIGTERMTimeout         = 2 * time.Second
 	SparklineHistory       = 60

@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -360,6 +359,9 @@ func (m *model) restoreSelection(prev Port, hasPrev bool) {
 	if cursor < 0 {
 		cursor = 0
 	}
+	if cursor >= len(m.portRows) {
+		cursor = len(m.portRows) - 1
+	}
 	for i := cursor; i < len(m.portRows); i++ {
 		if m.portRows[i].kind == portRowData {
 			m.table.SetCursor(i)
@@ -510,26 +512,6 @@ func (m model) killProcess(pid int, processName, port string) tea.Cmd {
 			success: true,
 			error:   fmt.Sprintf("Force killed %s (PID %d) on port %s", processName, pid, port),
 		}
-	}
-}
-
-func (m model) openLink(url string, port string) tea.Cmd {
-	return func() tea.Msg {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "linux":
-			cmd = exec.Command("xdg-open", url)
-		case "darwin":
-			cmd = exec.Command("open", url)
-		case "windows":
-			cmd = exec.Command("cmd", "/c", "start", url)
-		default:
-			return statusUpdateMsg{message: fmt.Sprintf("Unsupported OS: %s", runtime.GOOS)}
-		}
-		if err := cmd.Start(); err != nil {
-			return statusUpdateMsg{message: fmt.Sprintf("Failed to open %s: %v", url, err)}
-		}
-		return statusUpdateMsg{message: fmt.Sprintf("Opened %s (port %s)", url, port)}
 	}
 }
 

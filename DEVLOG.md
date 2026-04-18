@@ -1,4 +1,13 @@
 ## DevLog
+### 2026-04-18: Filter shrink panic fix
+Clamped Ports-tab cursor restoration to the rebuilt row count before scanning for the next selectable row, which fixes the `index out of range` panic that could happen after filtering down from a longer list. Added a regression test that simulates a stale cursor surviving into a shorter filtered table. Files: helpers.go, helpers_test.go, README.md, WORK.md.
+
+### 2026-04-18: Ports table fills the available height
+Dropped `TableHeightPad` from 15 to 7 so the Ports tab table grows to fill the terminal instead of capping at ~6 visible rows on medium-height terminals. The pad now matches the actual chrome around the table (header + blank + filter bar + blank + status). Files: model.go.
+
+### 2026-04-18: Stats tab condensed, dropped open-in-browser
+Capped Stats-tab panel widths (50 per side, 100 total max) so the dashboard stops stretching across wide terminals with empty space, and grew the bottom Top Processes panel to consume any leftover vertical space so the dashboard fills the height of taller terminals instead of leaving dead rows under the panels. Dropped the `o`/open feature entirely — removed from status bar, help overlay, README, plus the handler in `update.go` and the `openLink` helper. The `Link` config field stays in place for the planned protocol-aware open rework. Files: view.go, update.go, helpers.go, README.md.
+
 ### 2026-04-13: In-app label editor
 Added a saved-label editor on `e` so port names can be created, changed, or cleared from the TUI without hand-editing config. Also replaced string-parsed row actions with explicit row metadata so section headers and spacer rows no longer confuse open/kill behavior after refreshes or filters. Files: model.go, helpers.go, view.go, update.go, helpers_test.go, update_test.go, README.md, WORK.md.
 

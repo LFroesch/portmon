@@ -147,6 +147,40 @@ func TestBuildTableRowsSkipsSectionHeadersWhenSelectionDisappears(t *testing.T) 
 	}
 }
 
+func TestBuildTableRowsClampsCursorWhenFilteredRowsShrink(t *testing.T) {
+	m := model{
+		table: testTableModel(),
+		portConfig: PortConfig{
+			Mappings: []PortMapping{
+				{Port: "80", CustomName: "HTTP"},
+			},
+		},
+		ports: []Port{
+			{Port: "80", PID: 1, Protocol: "TCP", Process: "nginx"},
+			{Port: "3000", PID: 2, Protocol: "TCP", Process: "node"},
+			{Port: "5000", PID: 3, Protocol: "TCP", Process: "python"},
+			{Port: "5432", PID: 4, Protocol: "TCP", Process: "postgres"},
+		},
+	}
+
+	m.buildTableRows()
+	m.table.SetCursor(5)
+	m.filterQuery = "5"
+
+	m.buildTableRows()
+
+	selected, ok := m.selectedPort()
+	if !ok {
+		t.Fatal("expected cursor to land on a filtered port row")
+	}
+	if selected.Port != "5000" && selected.Port != "5432" {
+		t.Fatalf("expected selection to stay within filtered ports, got %+v", selected)
+	}
+	if cursor := m.table.Cursor(); cursor < 0 || cursor >= len(m.portRows) {
+		t.Fatalf("expected clamped cursor within %d rows, got %d", len(m.portRows), cursor)
+	}
+}
+
 func TestUpdatePortLabelCreatesAndClearsCustomMapping(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "config.json")

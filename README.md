@@ -60,6 +60,7 @@ Ports are split into two sections:
 The Ports tab also includes:
 
 - Inline filter/search with `/`
+- Selection recovery when refreshes or filters shrink the visible rows
 - Built-in labels only for canonical service ports like `22`, `53`, `80`, and `443`
 - `e` in-app label editor for saving or clearing custom port names
 
@@ -82,7 +83,6 @@ btop-style system dashboard:
 | `j/k`, `up/down` | Navigate |
 | `e` | Edit or clear saved label for selected port |
 | `enter` | Kill process (with confirmation) |
-| `o` | Open port URL in browser |
 | `r` | Refresh |
 | `x` | Reload config |
 | `c` | Show config path |
@@ -115,7 +115,7 @@ Config file: `~/.config/portmon/config.json` (created on first run)
 | `port_mappings[].custom_name` | Display name | — |
 | `port_mappings[].description` | Description | — |
 | `port_mappings[].hidden` | Hide from display | false |
-| `port_mappings[].link` | URL for `o` key | `http://localhost:PORT` |
+| `port_mappings[].link` | Saved URL for the port | `http://localhost:PORT` |
 
 Config mappings override the built-in canonical port labels.
 

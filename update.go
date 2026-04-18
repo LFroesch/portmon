@@ -213,14 +213,6 @@ func (m *model) handlePortsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterQuery = ""
 			m.buildTableRows()
 		}
-	case "o":
-		if details, ok := m.selectedPortDetails(); ok {
-			if details.Mapping.Link != "" {
-				return m, m.openLink(details.Mapping.Link, details.Port.Port)
-			}
-			return m, m.openLink(fmt.Sprintf("http://localhost:%s", details.Port.Port), details.Port.Port)
-		}
-		m.statusMsg = "No port selected"
 	case "enter":
 		if details, ok := m.selectedPortDetails(); ok {
 			if details.Port.PID > 0 {

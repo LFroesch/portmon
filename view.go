@@ -69,7 +69,7 @@ func (m model) renderStatus() string {
 	case TabPorts:
 		keys := []struct{ key, action string }{
 			{"?", "help"}, {"q", "quit"}, {"enter", "kill"},
-			{"o", "open"}, {"e", "label"}, {"/", "filter"},
+			{"e", "label"}, {"/", "filter"},
 			{"r", "refresh"}, {"tab", "stats"},
 		}
 		for i, k := range keys {
@@ -123,6 +123,13 @@ func (m model) renderPorts() string {
 func (m *model) renderStats(maxH int) string {
 	w := m.width
 	panelW := w / 2
+	if panelW > 50 {
+		panelW = 50
+	}
+	fullW := panelW * 2
+	if fullW > w {
+		fullW = w
+	}
 
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -134,7 +141,7 @@ func (m *model) renderStats(maxH int) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorDim).
 		Padding(0, 1).
-		Width(w)
+		Width(fullW)
 
 	barW := 20
 
@@ -203,11 +210,7 @@ func (m *model) renderStats(maxH int) string {
 		right = append(right, "")
 	}
 
-	leftPanel := panel.Render(strings.Join(left, "\n"))
-	rightPanel := panel.Render(strings.Join(right, "\n"))
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-
-	// Top processes panel
+	// Top processes panel content
 	var bottom []string
 	bottom = append(bottom, sectionStyle.Render("Top Processes"), "")
 	bottom = append(bottom, fmt.Sprintf("  %-8s %-7s %-7s %s",
@@ -222,7 +225,21 @@ func (m *model) renderStats(maxH int) string {
 			actionStyle.Render(p.Name),
 		))
 	}
-	bottomPanel := fullPanel.Render(strings.Join(bottom, "\n"))
+
+	// Distribute available height: top row keeps its natural size, bottom
+	// panel expands to consume any remaining vertical space.
+	topContentH := len(left)
+	bottomContentH := len(bottom)
+	usedH := topContentH + bottomContentH + 4 // 2 borders × 2 panels
+	if extra := maxH - usedH; extra > 0 {
+		bottomContentH += extra
+	}
+
+	leftPanel := panel.Height(topContentH).Render(strings.Join(left, "\n"))
+	rightPanel := panel.Height(topContentH).Render(strings.Join(right, "\n"))
+	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+
+	bottomPanel := fullPanel.Height(bottomContentH).Render(strings.Join(bottom, "\n"))
 
 	full := lipgloss.JoinVertical(lipgloss.Left, topRow, bottomPanel)
 	lines := strings.Split(full, "\n")
@@ -259,7 +276,6 @@ func (m model) renderHelp() string {
 	keys := []struct{ key, desc string }{
 		{"↑/↓, j/k", "Navigate ports"},
 		{"enter", "Kill selected process"},
-		{"o", "Open port URL in browser"},
 		{"e", "Edit or clear saved port label"},
 		{"r", "Refresh port list"},
 		{"x", "Reload config file"},
