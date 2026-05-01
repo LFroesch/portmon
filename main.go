@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,7 +12,21 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "portmon — Live port monitor and system stats dashboard\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: portmon [flags]\n\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+	if *showVersion {
+		fmt.Println("portmon " + version)
+		os.Exit(0)
+	}
+
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
