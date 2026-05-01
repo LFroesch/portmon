@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -34,11 +33,10 @@ func main() {
 }
 
 func initialModel() model {
-	homeDir, err := os.UserHomeDir()
+	configFile, err := configPath()
 	if err != nil {
-		log.Fatal("Could not determine home directory: ", err)
+		log.Fatal("Could not determine config path: ", err)
 	}
-	configFile := filepath.Join(homeDir, ".config", "portmon", "config.json")
 
 	columns := []table.Column{
 		{Title: "Port", Width: 8},

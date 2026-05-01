@@ -36,6 +36,18 @@ var builtinPortMappings = map[string]PortMapping{
 
 // --- Config ---
 
+func configPath() (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return "", err
+		}
+		base = filepath.Join(home, ".config")
+	}
+	return filepath.Join(base, "portmon", "config.json"), nil
+}
+
 func loadPortConfig(configFile string) PortConfig {
 	var config PortConfig
 	data, err := os.ReadFile(configFile)
