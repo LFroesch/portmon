@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -48,7 +49,6 @@ type PortMapping struct {
 	CustomName  string `json:"custom_name"`
 	Description string `json:"description"`
 	Hidden      bool   `json:"hidden"`
-	Link        string `json:"link"`
 }
 
 type PortConfig struct {
@@ -81,6 +81,7 @@ type model struct {
 	configFile       string
 	lastUpdate       time.Time
 	statusMsg        string
+	portScanWarning  string
 	showHelp         bool
 	showConfirmation bool
 	labelEditor      bool
@@ -106,7 +107,10 @@ type model struct {
 // --- Messages ---
 
 type tickMsg time.Time
-type updatePortsMsg []Port
+type updatePortsMsg struct {
+	ports   []Port
+	warning string
+}
 type killProcessMsg struct {
 	success bool
 	error   string
@@ -115,6 +119,17 @@ type statusUpdateMsg struct {
 	message string
 }
 type statsMsg SystemStats
+
+func statsSupportMessage() string {
+	switch runtime.GOOS {
+	case "linux":
+		return ""
+	case "darwin":
+		return "Stats tab is unavailable on macOS. Port scanning still works."
+	default:
+		return "Stats tab requires Linux with a /proc filesystem."
+	}
+}
 
 // --- Init ---
 

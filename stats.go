@@ -14,6 +14,9 @@ import (
 var blocks = []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
 type SystemStats struct {
+	Supported bool
+	Warning   string
+
 	CPUPercent float64
 	MemTotal   uint64 // bytes
 	MemUsed    uint64

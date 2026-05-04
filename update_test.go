@@ -81,3 +81,42 @@ func TestLabelEditorEnterSavesAndRebuildsRows(t *testing.T) {
 		t.Fatal("expected save status message")
 	}
 }
+
+func TestUpdatePortsMsgStoresWarning(t *testing.T) {
+	m := model{
+		table: testTableModel(),
+	}
+
+	next, _ := m.Update(updatePortsMsg{
+		ports:   []Port{},
+		warning: "Port scan unavailable: netstat not found",
+	})
+	updated := next.(model)
+
+	if updated.portScanWarning == "" {
+		t.Fatal("expected port scan warning to be stored")
+	}
+}
+
+func TestStatsMsgUnsupportedDoesNotPopulateSparklines(t *testing.T) {
+	m := model{
+		cpuSpark:   NewSparkline(10),
+		memSpark:   NewSparkline(10),
+		swapSpark:  NewSparkline(10),
+		netRxSpark: NewSparkline(10),
+		netTxSpark: NewSparkline(10),
+	}
+
+	next, _ := m.Update(statsMsg(SystemStats{
+		Supported: false,
+		Warning:   "Stats tab is unavailable on macOS. Port scanning still works.",
+	}))
+	updated := next.(model)
+
+	if updated.stats.Supported {
+		t.Fatal("expected stats to be marked unsupported")
+	}
+	if len(updated.cpuSpark.values) != 0 || len(updated.memSpark.values) != 0 || len(updated.netRxSpark.values) != 0 {
+		t.Fatal("expected unsupported stats update to avoid polluting spark history")
+	}
+}

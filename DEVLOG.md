@@ -1,4 +1,10 @@
 ## DevLog
+### 2026-05-04: Release polish for diagnostics and platform handling
+Closed the main v1 professionalism gaps. Port scanning now reports missing-tool / command failures explicitly instead of silently rendering an empty table, the Stats tab shows a clear unsupported/unavailable state on non-Linux or unreadable `/proc` environments, and the dead `link` config field was removed from the public app surface and docs to match the current feature set. Added regression coverage for the new warning paths. Files: helpers.go, model.go, update.go, view.go, stats.go, main.go, helpers_test.go, update_test.go, README.md, WORK.md, DEVLOG.md.
+
+### 2026-05-04: WORK audit for v1 blocker sprint
+Audited `WORK.md` against the current codebase and tests. Removed the stale help-overlay task because it is already implemented, verified the current Go tests pass, and rewrote `WORK.md` around actual v1 blockers: scanner diagnostics, unsupported-platform stats handling, and the dead `link` config surface left behind after removing open-in-browser. Files: WORK.md, DEVLOG.md.
+
 ### 2026-04-18: Filter shrink panic fix
 Clamped Ports-tab cursor restoration to the rebuilt row count before scanning for the next selectable row, which fixes the `index out of range` panic that could happen after filtering down from a longer list. Added a regression test that simulates a stale cursor surviving into a shorter filtered table. Files: helpers.go, helpers_test.go, README.md, WORK.md.
 

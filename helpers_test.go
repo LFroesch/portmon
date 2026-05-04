@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -31,19 +32,19 @@ func TestGetCustomNamePrefersUserMappingOverBuiltin(t *testing.T) {
 		},
 	}
 
-	name, desc, hidden, link := m.getCustomName("80")
+	name, desc, hidden := m.getCustomName("80")
 	if name != "Local Override" {
 		t.Fatalf("expected user mapping to win, got %q", name)
 	}
-	if desc != "custom" || hidden || link != "" {
-		t.Fatalf("unexpected mapping values: desc=%q hidden=%v link=%q", desc, hidden, link)
+	if desc != "custom" || hidden {
+		t.Fatalf("unexpected mapping values: desc=%q hidden=%v", desc, hidden)
 	}
 }
 
 func TestGetCustomNameFallsBackToBuiltinMapping(t *testing.T) {
 	m := model{}
 
-	name, _, _, _ := m.getCustomName("443")
+	name, _, _ := m.getCustomName("443")
 	if name != "HTTPS" {
 		t.Fatalf("expected builtin HTTPS label, got %q", name)
 	}
@@ -209,5 +210,37 @@ func TestUpdatePortLabelCreatesAndClearsCustomMapping(t *testing.T) {
 	}
 	if len(m.portConfig.Mappings) != 0 {
 		t.Fatalf("expected mapping removal after clearing, got %+v", m.portConfig.Mappings)
+	}
+}
+
+func TestUpdatePortLabelKeepsDescriptionOnlyMapping(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.json")
+
+	m := model{
+		configFile: configFile,
+		portConfig: PortConfig{
+			RefreshInterval: DefaultRefreshInterval,
+			Mappings: []PortMapping{
+				{Port: "3000", CustomName: "Frontend", Description: "Dev server"},
+			},
+		},
+	}
+
+	if err := m.updatePortLabel("3000", ""); err != nil {
+		t.Fatalf("clear label failed: %v", err)
+	}
+	if len(m.portConfig.Mappings) != 1 {
+		t.Fatalf("expected description-only mapping to remain, got %+v", m.portConfig.Mappings)
+	}
+	if m.portConfig.Mappings[0].Description != "Dev server" {
+		t.Fatalf("expected description to be preserved, got %+v", m.portConfig.Mappings[0])
+	}
+}
+
+func TestFormatCommandErrorNotFound(t *testing.T) {
+	err := formatCommandError("netstat", exec.ErrNotFound)
+	if err != "netstat not found" {
+		t.Fatalf("unexpected error message: %q", err)
 	}
 }

@@ -59,6 +59,8 @@ func initialModel() model {
 
 	cpuBase, _ := readCPUSample()
 	netBase, _ := readNetSample()
+	statsWarning := statsSupportMessage()
+	statsSupported := statsWarning == ""
 
 	return model{
 		table:      t,
@@ -76,5 +78,9 @@ func initialModel() model {
 		netTxSpark: NewSparkline(SparklineHistory),
 		prevCPU:    cpuBase,
 		prevNet:    netBase,
+		stats: SystemStats{
+			Supported: statsSupported,
+			Warning:   statsWarning,
+		},
 	}
 }

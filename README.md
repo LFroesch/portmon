@@ -66,13 +66,15 @@ The Ports tab also includes:
 
 ### Stats Tab
 
-btop-style system dashboard:
+btop-style system dashboard on Linux:
 
 - CPU/MEM/SWAP usage bars with sparklines
 - Disk usage (deduped by device)
 - Network rx/tx rates with sparklines
 - System info (hostname, kernel, uptime, load average)
 - Top 5 processes by CPU
+
+On unsupported platforms, the Stats tab shows a clear unavailable message instead of an empty dashboard.
 
 ## Keybindings
 
@@ -101,8 +103,7 @@ Config file: `~/.config/portmon/config.json` (created on first run)
       "port": "3000",
       "custom_name": "React App",
       "description": "Frontend dev server",
-      "hidden": false,
-      "link": "http://localhost:3000"
+      "hidden": false
     }
   ]
 }
@@ -115,7 +116,6 @@ Config file: `~/.config/portmon/config.json` (created on first run)
 | `port_mappings[].custom_name` | Display name | — |
 | `port_mappings[].description` | Description | — |
 | `port_mappings[].hidden` | Hide from display | false |
-| `port_mappings[].link` | Saved URL for the port | `http://localhost:PORT` |
 
 Config mappings override the built-in canonical port labels.
 
@@ -125,6 +125,8 @@ You can also press `e` on the Ports tab to write `custom_name` entries back to t
 
 - Linux with `netstat` or `lsof` (stats tab requires `/proc` filesystem)
 - macOS: port scanning works via `lsof`, stats tab is Linux-only
+
+If neither `netstat` nor `lsof` is available, portmon now shows an explicit scanner warning instead of an empty ports table with no explanation.
 
 ## License
 

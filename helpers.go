@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -120,16 +121,16 @@ func savePortConfig(configFile string, config PortConfig) error {
 
 // --- Table helpers ---
 
-func (m *model) getCustomName(port string) (string, string, bool, string) {
+func (m *model) getCustomName(port string) (string, string, bool) {
 	for _, mapping := range m.portConfig.Mappings {
 		if mapping.Port == port {
-			return mapping.CustomName, mapping.Description, mapping.Hidden, mapping.Link
+			return mapping.CustomName, mapping.Description, mapping.Hidden
 		}
 	}
 	if mapping, ok := builtinPortMappings[port]; ok {
-		return mapping.CustomName, mapping.Description, mapping.Hidden, mapping.Link
+		return mapping.CustomName, mapping.Description, mapping.Hidden
 	}
-	return "", "", false, ""
+	return "", "", false
 }
 
 func (m *model) resizeTable() {
@@ -182,7 +183,7 @@ func (m *model) buildTableRows() {
 	procResources := getProcessResources(pids)
 
 	for _, port := range m.ports {
-		if _, _, hidden, _ := m.getCustomName(port.Port); hidden {
+		if _, _, hidden := m.getCustomName(port.Port); hidden {
 			continue
 		}
 		if !m.matchesFilter(port) {
@@ -221,7 +222,7 @@ func (m *model) buildTableRows() {
 		meta = append(meta, portRowMeta{kind: portRowSection})
 		for _, p := range ports {
 			name := cleanProcessName(p.Process)
-			if customName, _, _, _ := m.getCustomName(p.Port); customName != "" {
+			if customName, _, _ := m.getCustomName(p.Port); customName != "" {
 				name = fmt.Sprintf("%s (%s)", customName, name)
 			}
 			cpuPct, memPct := "-", "-"
@@ -252,7 +253,7 @@ func (m model) matchesFilter(port Port) bool {
 		return true
 	}
 
-	name, desc, _, link := m.getCustomName(port.Port)
+	name, desc, _ := m.getCustomName(port.Port)
 	candidates := []string{
 		port.Port,
 		port.Protocol,
@@ -263,7 +264,6 @@ func (m model) matchesFilter(port Port) bool {
 		port.Status,
 		name,
 		desc,
-		link,
 	}
 	for _, candidate := range candidates {
 		if strings.Contains(strings.ToLower(candidate), query) {
@@ -284,7 +284,7 @@ func (m model) countPortSections() (custom, system int) {
 		}
 	}
 	for _, port := range m.ports {
-		if _, _, hidden, _ := m.getCustomName(port.Port); hidden {
+		if _, _, hidden := m.getCustomName(port.Port); hidden {
 			continue
 		}
 		if customPortSet[port.Port] {
@@ -403,7 +403,7 @@ func (m *model) updatePortLabel(port, label string) error {
 	if index >= 0 {
 		m.portConfig.Mappings[index].CustomName = label
 		mapping := m.portConfig.Mappings[index]
-		if mapping.CustomName == "" && mapping.Description == "" && mapping.Link == "" && !mapping.Hidden {
+		if mapping.CustomName == "" && mapping.Description == "" && !mapping.Hidden {
 			m.portConfig.Mappings = append(m.portConfig.Mappings[:index], m.portConfig.Mappings[index+1:]...)
 		}
 	} else if label != "" {
@@ -426,7 +426,8 @@ func (m *model) updatePortLabel(port, label string) error {
 
 func (m model) updatePorts() tea.Cmd {
 	return func() tea.Msg {
-		return updatePortsMsg(getPorts())
+		ports, warning := getPorts()
+		return updatePortsMsg{ports: ports, warning: warning}
 	}
 }
 
@@ -436,11 +437,19 @@ func (m model) collectStats() tea.Cmd {
 	interval := float64(m.portConfig.RefreshInterval)
 
 	return func() tea.Msg {
-		var s SystemStats
+		s := SystemStats{Supported: true}
+
+		if warning := statsSupportMessage(); warning != "" {
+			s.Supported = false
+			s.Warning = warning
+			return statsMsg(s)
+		}
 
 		currCPU, err := readCPUSample()
 		if err == nil {
 			s.CPUPercent = calcCPUPercent(prevCPU, currCPU)
+		} else {
+			s.Warning = "Stats data unavailable: could not read /proc CPU data."
 		}
 
 		mem, err := readMemInfo()
@@ -455,6 +464,8 @@ func (m model) collectStats() tea.Cmd {
 			if mem.swapTotal > 0 {
 				s.SwapPercent = float64(s.SwapUsed) / float64(mem.swapTotal) * 100
 			}
+		} else if s.Warning == "" {
+			s.Warning = "Stats data unavailable: could not read /proc memory data."
 		}
 
 		currNet, err := readNetSample()
@@ -463,6 +474,8 @@ func (m model) collectStats() tea.Cmd {
 			s.NetTxBytes = currNet.txBytes
 			s.NetRxRate = float64(currNet.rxBytes-prevNet.rxBytes) / interval
 			s.NetTxRate = float64(currNet.txBytes-prevNet.txBytes) / interval
+		} else if err != nil && s.Warning == "" {
+			s.Warning = "Stats data unavailable: could not read /proc network data."
 		}
 
 		s.LoadAvg1, s.LoadAvg5, s.LoadAvg15, _ = readLoadAvg()
@@ -529,24 +542,53 @@ func (m model) killProcess(pid int, processName, port string) tea.Cmd {
 
 // --- Port scanning ---
 
-func getPorts() []Port {
+func getPorts() ([]Port, string) {
 	var ports []Port
+	var failures []string
 
 	cmd := exec.Command("netstat", "-tulpn")
 	output, err := cmd.Output()
 	if err == nil {
 		ports = parseNetstatOutput(string(output))
 		if len(ports) > 0 {
-			return ports
+			return ports, ""
 		}
+		failures = append(failures, "netstat returned no listening ports")
+	} else {
+		failures = append(failures, formatCommandError("netstat", err))
 	}
 
 	cmd = exec.Command("lsof", "-i", "-P", "-n")
 	output, err = cmd.Output()
 	if err == nil {
 		ports = parseLsofOutput(string(output))
+		if len(ports) > 0 {
+			return ports, ""
+		}
+		failures = append(failures, "lsof returned no listening ports")
+	} else {
+		failures = append(failures, formatCommandError("lsof", err))
 	}
-	return ports
+	if len(failures) == 0 {
+		return ports, ""
+	}
+	return ports, "Port scan unavailable: " + strings.Join(failures, "; ")
+}
+
+func formatCommandError(name string, err error) string {
+	var exitErr *exec.ExitError
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		return fmt.Sprintf("%s not found", name)
+	case errors.As(err, &exitErr):
+		msg := strings.TrimSpace(string(exitErr.Stderr))
+		if msg == "" {
+			return fmt.Sprintf("%s failed", name)
+		}
+		return fmt.Sprintf("%s failed: %s", name, msg)
+	default:
+		return fmt.Sprintf("%s failed: %v", name, err)
+	}
 }
 
 func parseNetstatOutput(output string) []Port {

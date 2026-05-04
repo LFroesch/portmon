@@ -89,8 +89,17 @@ func (m model) renderStatus() string {
 	}
 
 	bar := strings.Join(parts, "")
-	if m.statusMsg != "" {
-		bar += "  " + statusMsgStyle.Render("> "+m.statusMsg)
+	notice := ""
+	switch {
+	case m.portScanWarning != "":
+		notice = m.portScanWarning
+	case m.tab == TabStats && m.stats.Warning != "":
+		notice = m.stats.Warning
+	case m.statusMsg != "":
+		notice = m.statusMsg
+	}
+	if notice != "" {
+		bar += "  " + statusMsgStyle.Render("> "+notice)
 	}
 	return bar
 }
@@ -117,10 +126,31 @@ func (m model) renderPorts() string {
 		Width(panelWidth).
 		Render(fmt.Sprintf("%s %s", sectionStyle.Render(filterLabel), filterValue))
 
+	if len(m.table.Rows()) == 0 {
+		message := "No listening ports found."
+		if m.portScanWarning != "" {
+			message = m.portScanWarning
+		}
+		empty := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorDim).
+			Padding(1, 2).
+			Width(panelWidth).
+			Render(message)
+		return lipgloss.JoinVertical(lipgloss.Left, filterBar, empty)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, filterBar, m.table.View())
 }
 
 func (m *model) renderStats(maxH int) string {
+	if !m.stats.Supported {
+		return m.renderStatsMessage(m.stats.Warning)
+	}
+	if m.stats.Warning != "" && m.stats.CPUPercent == 0 && m.stats.MemTotal == 0 && m.stats.NetRxBytes == 0 && m.stats.NetTxBytes == 0 {
+		return m.renderStatsMessage(m.stats.Warning)
+	}
+
 	w := m.width
 	panelW := w / 2
 	if panelW > 50 {
@@ -264,6 +294,24 @@ func (m *model) renderStats(maxH int) string {
 	}
 
 	return strings.Join(visible, "\n")
+}
+
+func (m model) renderStatsMessage(message string) string {
+	panel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorDim).
+		Padding(1, 2).
+		Width(minInt(m.width-2, 80))
+
+	lines := []string{
+		sectionStyle.Render("Stats"),
+		"",
+		message,
+	}
+
+	return lipgloss.Place(m.width, m.height-4,
+		lipgloss.Center, lipgloss.Center,
+		panel.Render(strings.Join(lines, "\n")))
 }
 
 func (m model) renderHelp() string {

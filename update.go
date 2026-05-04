@@ -30,22 +30,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case updatePortsMsg:
-		m.ports = []Port(msg)
+		m.ports = msg.ports
+		m.portScanWarning = msg.warning
 		m.buildTableRows()
 		return m, nil
 
 	case statsMsg:
 		m.stats = SystemStats(msg)
-		m.cpuSpark.Add(m.stats.CPUPercent)
-		m.memSpark.Add(m.stats.MemPercent)
-		m.swapSpark.Add(m.stats.SwapPercent)
-		m.netRxSpark.Add(m.stats.NetRxRate)
-		m.netTxSpark.Add(m.stats.NetTxRate)
-		if cpu, err := readCPUSample(); err == nil {
-			m.prevCPU = cpu
-		}
-		if net, err := readNetSample(); err == nil {
-			m.prevNet = net
+		if m.stats.Supported {
+			m.cpuSpark.Add(m.stats.CPUPercent)
+			m.memSpark.Add(m.stats.MemPercent)
+			m.swapSpark.Add(m.stats.SwapPercent)
+			m.netRxSpark.Add(m.stats.NetRxRate)
+			m.netTxSpark.Add(m.stats.NetTxRate)
+			if cpu, err := readCPUSample(); err == nil {
+				m.prevCPU = cpu
+			}
+			if net, err := readNetSample(); err == nil {
+				m.prevNet = net
+			}
 		}
 		return m, nil
 
