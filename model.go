@@ -13,8 +13,8 @@ import (
 const (
 	DefaultRefreshInterval = 2
 	EphemeralPortThreshold = 10000
-	MinTableHeight         = 5
-	MinProcessWidth        = 15
+	MinTableHeight         = 3
+	MinProcessWidth        = 6
 	TableHeightPad         = 7
 	AvailableWidthPad      = 15
 	SIGTERMTimeout         = 2 * time.Second

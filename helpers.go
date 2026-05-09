@@ -140,6 +140,9 @@ func (m *model) resizeTable() {
 	}
 
 	availableWidth := m.width - AvailableWidthPad
+	if availableWidth < 24 {
+		availableWidth = 24
+	}
 	portW, protoW, pidW, cpuW, memW, userW, statusW, addrW := 8, 6, 8, 6, 6, 10, 10, 20
 	processW := availableWidth - portW - protoW - pidW - cpuW - memW - userW - statusW - addrW
 	if processW < MinProcessWidth {

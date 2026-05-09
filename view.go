@@ -29,8 +29,8 @@ func (m model) View() string {
 		}
 	case TabStats:
 		contentH := m.height - 4
-		if contentH < 5 {
-			contentH = 5
+		if contentH < 3 {
+			contentH = 3
 		}
 		content = m.renderStats(contentH)
 	}
@@ -106,8 +106,8 @@ func (m model) renderStatus() string {
 
 func (m model) renderPorts() string {
 	panelWidth := m.width - 2
-	if panelWidth < 20 {
-		panelWidth = 20
+	if panelWidth < 1 {
+		panelWidth = 1
 	}
 
 	filterLabel := "Filter"
@@ -152,6 +152,9 @@ func (m *model) renderStats(maxH int) string {
 	}
 
 	w := m.width
+	if w < 20 {
+		w = 20
+	}
 	panelW := w / 2
 	if panelW > 50 {
 		panelW = 50
@@ -315,22 +318,32 @@ func (m model) renderStatsMessage(message string) string {
 }
 
 func (m model) renderHelp() string {
+	helpWidth := m.width - 4
+	if helpWidth < 28 {
+		helpWidth = 28
+	}
+	helpHeight := m.height - 4
+	if helpHeight < 8 {
+		helpHeight = 8
+	}
 	helpStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorPrimary).
 		Padding(1, 2).
-		Width(m.width - 4)
+		Width(helpWidth)
 
 	keys := []struct{ key, desc string }{
 		{"↑/↓, j/k", "Navigate ports"},
 		{"enter", "Kill selected process"},
 		{"e", "Edit or clear saved port label"},
+		{"/", "Filter ports"},
 		{"r", "Refresh port list"},
 		{"x", "Reload config file"},
 		{"c", "Show config path"},
 		{"tab/1/2", "Switch tabs"},
+		{"y/n, esc", "Confirm or cancel process kill"},
 		{"?", "Toggle this help"},
-		{"q", "Quit"},
+		{"q / ctrl+c", "Quit"},
 	}
 
 	var lines []string
@@ -346,7 +359,7 @@ func (m model) renderHelp() string {
 	lines = append(lines, dimTextStyle.Render(fmt.Sprintf("Refresh: %ds  Config: %s",
 		m.portConfig.RefreshInterval, m.configFile)))
 
-	return lipgloss.Place(m.width, m.height-4,
+	return lipgloss.Place(m.width, helpHeight,
 		lipgloss.Center, lipgloss.Center,
 		helpStyle.Render(strings.Join(lines, "\n")))
 }
