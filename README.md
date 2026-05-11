@@ -1,6 +1,8 @@
 # portmon
 
-Terminal dashboard for live port inspection and lightweight system stats. `portmon` is mainly for checking what is listening where, what process owns it, and whether a known port should be labeled or hidden.
+Terminal dashboard for live port inspection and lightweight system stats. `portmon` is mainly for figuring out what is listening where, which process owns it, and which noisy ports should be labeled or hidden.
+
+![portmon hero screenshot](assets/screenshots/hero.png)
 
 ## Install
 
