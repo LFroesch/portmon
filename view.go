@@ -14,6 +14,7 @@ func (m model) View() string {
 	}
 
 	header := m.renderHeader()
+	sep := dimTextStyle.Render(strings.Repeat("─", m.width))
 
 	var content string
 	switch m.tab {
@@ -37,11 +38,11 @@ func (m model) View() string {
 
 	status := m.renderStatus()
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, "", content, "", status)
+	return lipgloss.JoinVertical(lipgloss.Left, header, sep, content, sep, status)
 }
 
 func (m model) renderHeader() string {
-	title := titleStyle.Render("Portmon")
+	title := titleStyle.Render("Portmon") + " " + dimTextStyle.Render(version)
 
 	var tabs []string
 	for i, name := range tabNames {
@@ -53,13 +54,14 @@ func (m model) renderHeader() string {
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabs...)
 
-	return lipgloss.JoinHorizontal(lipgloss.Bottom,
-		title,
-		"  ",
-		tabBar,
-		"  ",
-		dimTextStyle.Render(fmt.Sprintf("updated %s", m.lastUpdate.Format("15:04:05"))),
-	)
+	left := lipgloss.JoinHorizontal(lipgloss.Bottom, title, "  ", tabBar)
+	right := dimTextStyle.Render(fmt.Sprintf("updated %s", m.lastUpdate.Format("15:04:05")))
+	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 2 {
+		right = ""
+		gap = max(1, m.width-lipgloss.Width(left))
+	}
+	return left + strings.Repeat(" ", gap) + right
 }
 
 func (m model) renderStatus() string {
