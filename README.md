@@ -11,7 +11,7 @@ Terminal dashboard for live port inspection and lightweight system stats. `portm
 Supported platforms: Linux and macOS.
 
 Linux has full support. On macOS, port scanning works, but the stats tab is Linux-only.
-Native Windows is not supported yet. On Windows, use WSL for the ports view.
+Native Windows is not supported yet.
 
 Recommended:
 
@@ -25,18 +25,6 @@ Other options:
 go install github.com/LFroesch/portmon@latest
 make install
 ```
-
-Windows:
-
-```powershell
-./install.ps1
-```
-
-```bat
-install.cmd
-```
-
-Both Windows installer entrypoints exit with a clear unsupported message on native Windows.
 
 Run:
 
@@ -85,8 +73,6 @@ Use `e` in the app to add or clear custom labels directly from the Ports tab.
 - Linux: `netstat` or `lsof`
 - macOS: `lsof`
 - Stats tab on Linux also relies on `/proc`
-
-Native Windows support is currently blocked by Linux-specific filesystem and syscall usage in the stats/runtime paths.
 
 If neither scanner is available, `portmon` shows an explicit warning instead of an empty table.
 
