@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LFroesch/tui-suite/suitechrome"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -42,30 +43,21 @@ func (m model) View() string {
 }
 
 func (m model) renderHeader() string {
-	title := titleStyle.Render("Portmon") + " " + dimTextStyle.Render(version)
+	title := suitechrome.RenderTitle("portmon", version)
 
-	var tabs []string
+	var tabs []suitechrome.Tab
 	for i, name := range tabNames {
-		if Tab(i) == m.tab {
-			tabs = append(tabs, activeTabStyle.Render(name))
-		} else {
-			tabs = append(tabs, tabStyle.Render(name))
-		}
+		tabs = append(tabs, suitechrome.Tab{Label: fmt.Sprintf("%d %s", i+1, name), Active: Tab(i) == m.tab})
 	}
-	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabs...)
+	tabBar := suitechrome.RenderTabs(tabs)
 
 	left := lipgloss.JoinHorizontal(lipgloss.Bottom, title, "  ", tabBar)
 	right := dimTextStyle.Render(fmt.Sprintf("updated %s", m.lastUpdate.Format("15:04:05")))
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 2 {
-		right = ""
-		gap = max(1, m.width-lipgloss.Width(left))
-	}
-	return left + strings.Repeat(" ", gap) + right
+	return suitechrome.JoinHeader(m.width, left, right)
 }
 
 func (m model) renderStatus() string {
-	var parts []string
+	var actions []suitechrome.Action
 
 	switch m.tab {
 	case TabPorts:
@@ -74,23 +66,18 @@ func (m model) renderStatus() string {
 			{"e", "label"}, {"/", "filter"},
 			{"r", "refresh"}, {"tab", "stats"},
 		}
-		for i, k := range keys {
-			if i > 0 {
-				parts = append(parts, bulletStyle.Render(" · "))
-			}
-			parts = append(parts, keyStyle.Render(k.key), " ", actionStyle.Render(k.action))
+		for _, k := range keys {
+			actions = append(actions, suitechrome.Action{Key: k.key, Label: k.action})
 		}
 	case TabStats:
-		parts = append(parts,
-			keyStyle.Render("j/k"), " ", actionStyle.Render("scroll"),
-			bulletStyle.Render(" · "),
-			keyStyle.Render("tab"), " ", actionStyle.Render("ports"),
-			bulletStyle.Render(" · "),
-			keyStyle.Render("q"), " ", actionStyle.Render("quit"),
+		actions = append(actions,
+			suitechrome.Action{Key: "j/k", Label: "scroll"},
+			suitechrome.Action{Key: "tab", Label: "ports"},
+			suitechrome.Action{Key: "q", Label: "quit"},
 		)
 	}
 
-	bar := strings.Join(parts, "")
+	bar := suitechrome.RenderActions(actions)
 	notice := ""
 	switch {
 	case m.portScanWarning != "":
