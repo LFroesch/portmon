@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LFroesch/tui-suite/suitechrome"
+	"github.com/LFroesch/portmon/suitechrome"
 	"github.com/charmbracelet/lipgloss"
 )
 
