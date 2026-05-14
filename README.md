@@ -6,18 +6,21 @@ Terminal dashboard for live port inspection and lightweight system stats. `portm
 
 **Live demo:** [froesch.dev](https://froesch.dev)
 
+## Release Status
+
+Developed for WSL2/Linux first. Cross-platform testing and bug fixing for macOS and native Windows are still in progress.
+
+Linux is the primary target. The ports view is usable on macOS, but the stats tab is Linux-only. Native Windows is not supported for this app yet.
+
 ## Install
 
-Supported platforms: Linux and macOS.
-
-Linux has full support. On macOS, port scanning works, but the stats tab is Linux-only.
-Native Windows is not supported yet.
-
-Recommended:
+Quick install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LFroesch/portmon/main/install.sh | bash
 ```
+
+Direct installer: [`install.sh`](https://raw.githubusercontent.com/LFroesch/portmon/main/install.sh)
 
 Other options:
 
